@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v7.4 (Клики по внутриигровому меню)
+--  BLOX HUB v7.5 (Поиск кнопок с учётом ImageButton)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v7.4 (Внутриигровое меню)"
+    Title.Text = "🍎 Fruit Hub v7.5"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -153,7 +153,49 @@ local createSuccess, createErr = pcall(function()
         return os.difftime(now, serverTime)
     end
 
-    -- ========== ХОП ЧЕРЕЗ ВНУТРИИГРОВОЕ МЕНЮ ==========
+    -- ========== ПОИСК КНОПКИ В GUI (с учётом ImageButton) ==========
+
+    local function findServerButton(serverName)
+        local playerGui = Player:WaitForChild("PlayerGui")
+        local foundButton = nil
+
+        -- Рекурсивный поиск объекта с текстом
+        local function searchForText(parent, searchText)
+            for _, child in pairs(parent:GetChildren()) do
+                -- Проверяем, есть ли у объекта свойство Text
+                local hasText = pcall(function() return child.Text end)
+                if hasText then
+                    local text = child.Text or ""
+                    if string.find(text, searchText) or string.find(text, "Join") or string.find(text, "Играть") then
+                        -- Ищем родительскую кнопку (ImageButton или TextButton)
+                        local button = child
+                        while button and not (button:IsA("TextButton") or button:IsA("ImageButton")) do
+                            button = button.Parent
+                        end
+                        if button then
+                            return button
+                        end
+                    end
+                end
+                -- Рекурсивно обходим детей
+                local result = searchForText(child, searchText)
+                if result then return result end
+            end
+            return nil
+        end
+
+        -- Ищем по имени сервера (или по части имени)
+        foundButton = searchForText(playerGui, serverName)
+        if foundButton then return foundButton end
+
+        -- Если не нашли, ищем по общим словам "Join", "Играть"
+        foundButton = searchForText(playerGui, "Join")
+        if foundButton then return foundButton end
+
+        return nil
+    end
+
+    -- ========== ХОП ==========
 
     local function hopToAge(targetHours)
         Notify("🔍 Ищем сервер с возрастом ~" .. targetHours .. " ч...")
@@ -161,7 +203,6 @@ local createSuccess, createErr = pcall(function()
         if not servers then return end
 
         local targetAge = targetHours * 3600
-        local tolerance = 600 -- ±10 минут
         local found = nil
         local bestDiff = math.huge
         local foundName = ""
@@ -186,45 +227,21 @@ local createSuccess, createErr = pcall(function()
         local minutes = math.floor((age % 3600) / 60)
         Notify("⏳ Найден сервер: " .. hours .. "ч " .. minutes .. "м. Ищем в меню...")
 
-        -- Ищем внутриигровое меню серверов
-        local function findServerButton(serverName)
-            local playerGui = Player:WaitForChild("PlayerGui")
-            -- Обходим все элементы GUI
-            for _, gui in pairs(playerGui:GetDescendants()) do
-                if gui:IsA("TextButton") or gui:IsA("ImageButton") then
-                    local text = gui.Text or ""
-                    -- Ищем по имени сервера (может быть неполное совпадение)
-                    if string.find(text, serverName) or string.find(text, "Join") then
-                        return gui
-                    end
-                end
-            end
-            return nil
-        end
+        -- Открываем меню серверов (если оно не открыто)
+        pcall(function()
+            -- Здесь может быть своя функция для открытия меню, но обычно оно уже открыто
+        end)
 
-        -- Ищем кнопку сервера по имени
+        wait(1)
+
         local serverButton = findServerButton(foundName)
         if serverButton then
-            Notify("✅ Найдена кнопка сервера! Клик...")
+            Notify("✅ Найдена кнопка! Клик...")
             pcall(function()
                 serverButton:Click()
             end)
         else
-            -- Если не нашли по имени, пробуем найти любую кнопку "Join" или "Играть"
-            local playerGui = Player:WaitForChild("PlayerGui")
-            for _, gui in pairs(playerGui:GetDescendants()) do
-                if gui:IsA("TextButton") or gui:IsA("ImageButton") then
-                    local text = gui.Text or ""
-                    if string.find(text, "Join") or string.find(text, "Играть") then
-                        Notify("✅ Найдена кнопка Join! Клик...")
-                        pcall(function()
-                            gui:Click()
-                        end)
-                        return
-                    end
-                end
-            end
-            Notify("❌ Не удалось найти кнопку сервера. Попробуй вручную.")
+            Notify("❌ Кнопка не найдена. Попробуй перезапустить.")
         end
     end
 
@@ -252,5 +269,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v7.4 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v7.5 загружен! Нажми на 🍎")
 end
