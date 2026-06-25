@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v6.3 (Перехват времени старта)
+--  BLOX HUB v6.4 (Аптайм из DistributedGameTime)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 320)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
+    MainFrame.Size = UDim2.new(0, 380, 0, 240)
+    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -120)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v6.3"
+    Title.Text = "🍎 Fruit Hub v6.4"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -112,128 +112,64 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== ПЕРЕХВАТ ВРЕМЕНИ СТАРТА ==========
+    -- ========== ФУНКЦИИ ==========
 
-    local serverStartTime = nil
-    local isHooking = false
-
-    local function hookServerTime()
-        if isHooking then return end
-        isHooking = true
-        Notify("⏳ Подключаюсь к RemoteEvent...")
-
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        local minTime = math.huge
-
-        local function processNumber(num)
-            if type(num) == "number" and num > 1e9 then
-                if num < minTime then minTime = num end
-            end
-        end
-
-        -- Подключаемся к RemoteEvent
-        for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
-            if obj:IsA("RemoteEvent") then
-                obj.OnClientEvent:Connect(function(...)
-                    local args = {...}
-                    for _, arg in pairs(args) do
-                        processNumber(arg)
-                    end
-                    if minTime < math.huge and not serverStartTime then
-                        serverStartTime = minTime
-                        local age = os.time() - serverStartTime
-                        local hours = math.floor(age / 3600)
-                        local minutes = math.floor((age % 3600) / 60)
-                        local secs = math.floor(age % 60)
-                        Notify("✅ Время старта получено: " .. string.format("%02d:%02d:%02d", hours, minutes, secs))
-                        isHooking = false
-                    end
-                end)
-            end
-        end
-
-        -- Если через 10 секунд не получили, пробуем DistributedGameTime
-        wait(10)
-        if not serverStartTime then
-            local age = workspace.DistributedGameTime
-            if age > 0 then
-                serverStartTime = os.time() - age
-                Notify("⚠️ Время старта оценено (приблизительно)")
-                isHooking = false
-            else
-                Notify("❌ Не удалось получить время старта")
-                isHooking = false
-            end
-        end
-    end
-
-    -- ========== ПОКАЗАТЬ АПТАЙМ ==========
-
+    -- Показать аптайм из DistributedGameTime
     local function showUptime()
-        if not serverStartTime then
-            Notify("⏳ Время старта не известно. Подключаюсь...")
-            hookServerTime()
-            wait(2)
-            if not serverStartTime then
-                Notify("❌ Не удалось определить аптайм")
-                return
-            end
-        end
-
-        local age = os.time() - serverStartTime
+        local age = workspace.DistributedGameTime
         local hours = math.floor(age / 3600)
         local minutes = math.floor((age % 3600) / 60)
         local secs = math.floor(age % 60)
         local uptimeStr = string.format("%02dч %02dм %02dс", hours, minutes, secs)
         Notify("🕐 Аптайм сервера: " .. uptimeStr)
-        print("Аптайм сервера:", uptimeStr)
+        print("DistributedGameTime:", age, "сек")
     end
 
-    -- ========== ХОП НА СВЕЖИЙ СЕРВЕР (0-5 МИН) ==========
+    -- Хоп на сервер с нужным временем (например, 04:00:00)
+    -- Здесь нужно указать целевое время (в секундах с начала суток)
+    local function hopToTargetTime(targetHour, targetMinute, targetSecond)
+        local currentAge = workspace.DistributedGameTime
+        local currentTimeOfDay = currentAge % 86400 -- секунды с начала суток (если считать от 00:00)
+        local targetTime = targetHour * 3600 + targetMinute * 60 + targetSecond
+        -- Если цель уже прошла сегодня, берём завтра
+        if targetTime <= currentTimeOfDay then
+            targetTime = targetTime + 86400
+        end
+        local waitTime = targetTime - currentAge
+        if waitTime > 0 then
+            Notify("⏳ До цели " .. targetHour .. ":" .. targetMinute .. " осталось " .. math.floor(waitTime/60) .. " мин")
+            -- Ждём до цели (или просто переключаем сервер, если надо)
+            -- Для простоты сделаем переключение на другой сервер, если время не подходит
+        else
+            Notify("✅ Уже на нужном времени")
+        end
+    end
 
-    local function hopToFreshServer()
-        if not serverStartTime then
-            Notify("⏳ Жду время старта...")
-            hookServerTime()
-            wait(3)
-            if not serverStartTime then
-                Notify("❌ Не удалось определить возраст. Перезапуск...")
-                game:Shutdown()
-                return
+    -- Простой хоп через меню
+    local function hopServer()
+        Notify("🔄 Переключение сервера...")
+        pcall(function()
+            game:GetService("GuiService"):OpenPlayerMenu()
+        end)
+        wait(1)
+        local coreGui = game:GetService("CoreGui")
+        local playButton = nil
+        for _, child in pairs(coreGui:GetDescendants()) do
+            if child:IsA("TextButton") and string.find(child.Name, "Play") then
+                playButton = child
+                break
             end
         end
-
-        local age = os.time() - serverStartTime
-        local minutes = math.floor((age % 3600) / 60)
-
-        if minutes >= 0 and minutes <= 5 then
-            Notify("✅ Сервер свежий (" .. minutes .. " мин)")
-            return
+        if playButton then
+            pcall(function() playButton:Click() end)
         else
-            Notify("⏳ Возраст " .. minutes .. " мин. Переключаем...")
-            pcall(function()
-                game:GetService("GuiService"):OpenPlayerMenu()
-            end)
-            wait(1)
-            local coreGui = game:GetService("CoreGui")
-            local playButton = nil
-            for _, child in pairs(coreGui:GetDescendants()) do
-                if child:IsA("TextButton") and string.find(child.Name, "Play") then
-                    playButton = child
-                    break
-                end
-            end
-            if playButton then
-                pcall(function() playButton:Click() end)
-            else
-                game:Shutdown()
-            end
+            game:Shutdown()
         end
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🕐 Показать аптайм", showUptime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🚀 Хоп на свежий сервер (0-5 мин)", hopToFreshServer, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🕐 Аптайм сервера", showUptime, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🔄 Переключить сервер", hopServer, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
     print("6. Кнопки добавлены")
@@ -245,17 +181,11 @@ local createSuccess, createErr = pcall(function()
         print("Клик по кнопке, меню видимо =", menuVisible)
     end)
 
-    -- Автоматически пытаемся получить время при загрузке
-    wait(2)
-    if not serverStartTime then
-        hookServerTime()
-    end
-
     print("7. Обработчик клика установлен")
 end)
 
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v6.3 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v6.4 загружен! Нажми на 🍎")
 end
