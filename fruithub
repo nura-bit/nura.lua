@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v7.9 (Поиск сервера по имени)
+--  BLOX HUB v8.0 (Список серверов с возрастом)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 620)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -310)
+    MainFrame.Size = UDim2.new(0, 420, 0, 300)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -150)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v7.9 (Поиск по имени)"
+    Title.Text = "🍎 Fruit Hub v8.0 (Список серверов)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -153,135 +153,52 @@ local createSuccess, createErr = pcall(function()
         return os.difftime(now, serverTime)
     end
 
-    -- ========== ПОИСК КНОПКИ ПО ИМЕНИ СЕРВЕРА ==========
+    -- ========== ВЫВОД СПИСКА СЕРВЕРОВ ==========
 
-    local function findServerJoinButton(serverName)
-        if not serverName or serverName == "" then return nil end
-        local playerGui = Player:WaitForChild("PlayerGui")
-        local candidates = {}
-
-        -- Ищем все объекты с текстом, похожим на имя сервера
-        local function searchForText(parent, searchText)
-            for _, child in pairs(parent:GetChildren()) do
-                local hasText, text = pcall(function() return child.Text end)
-                if hasText and type(text) == "string" and text ~= "" then
-                    -- Проверяем, содержит ли текст имя сервера (без учёта регистра)
-                    if string.find(string.lower(text), string.lower(searchText)) then
-                        -- Поднимаемся к родительской кнопке
-                        local button = child
-                        while button and not (button:IsA("TextButton") or button:IsA("ImageButton")) do
-                            button = button.Parent
-                        end
-                        if button then
-                            table.insert(candidates, {Button = button, Text = text})
-                        end
-                    end
-                end
-                searchForText(child, searchText)
-            end
-        end
-
-        searchForText(playerGui, serverName)
-
-        -- Если нашли, возвращаем первую кнопку
-        if #candidates > 0 then
-            return candidates[1].Button
-        end
-
-        -- Если не нашли по полному имени, пробуем по частям (например, по первому слову)
-        local firstWord = serverName:match("^%S+")
-        if firstWord then
-            searchForText(playerGui, firstWord)
-            if #candidates > 0 then
-                return candidates[1].Button
-            end
-        end
-
-        return nil
-    end
-
-    -- ========== КЛИК ==========
-
-    local function clickButton(button)
-        if not button then return false end
-        pcall(function() button:Click() end)
-        pcall(function()
-            local pos = button.AbsolutePosition
-            local size = button.AbsoluteSize
-            if pos and size then
-                local x = pos.X + size.X/2
-                local y = pos.Y + size.Y/2
-                mouse1click(x, y)
-            end
-        end)
-        pcall(function()
-            local vim = game:GetService("VirtualInputManager")
-            if vim then
-                vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                wait(0.1)
-                vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            end
-        end)
-        return true
-    end
-
-    -- ========== ХОП ==========
-
-    local function hopToAge(targetHours)
-        Notify("🔍 Ищем сервер с возрастом ~" .. targetHours .. " ч...")
+    local function listServers()
+        Notify("🔍 Получаю список серверов... Смотри консоль!")
         local servers = getServers()
         if not servers then return end
 
-        local targetAge = targetHours * 3600
-        local found = nil
-        local bestDiff = math.huge
-        local foundName = ""
-
-        print("=== СПИСОК СЕРВЕРОВ ===")
+        print("=== СПИСОК СЕРВЕРОВ (возраст в формате ЧЧ:ММ:СС) ===")
+        local serverList = {}
         for _, server in pairs(servers) do
             local age = getServerAge(server)
-            local diff = math.abs(age - targetAge)
+            local hours = math.floor(age / 3600)
+            local minutes = math.floor((age % 3600) / 60)
+            local secs = math.floor(age % 60)
+            local ageStr = string.format("%02d:%02d:%02d", hours, minutes, secs)
             local name = server.name or "Без имени"
-            print("Имя:", name, "| Возраст:", age, "сек (" .. math.floor(age/3600) .. "ч " .. math.floor((age%3600)/60) .. "м)")
-            if diff < bestDiff then
-                bestDiff = diff
-                found = server
-                foundName = name
-            end
+            table.insert(serverList, {Name = name, Age = ageStr, AgeSec = age})
+            print(name, "| Возраст:", ageStr)
         end
 
-        if not found then
-            Notify("❌ Сервер с возрастом ~" .. targetHours .. "ч не найден")
-            return
+        -- Сортировка по возрасту (по убыванию, чтобы видеть старые сервера)
+        table.sort(serverList, function(a, b) return a.AgeSec > b.AgeSec end)
+
+        -- Вывод отсортированного списка
+        print("=== ОТСОРТИРОВАНО ПО ВОЗРАСТУ (от старых к новым) ===")
+        for _, info in pairs(serverList) do
+            print(info.Name, "| Возраст:", info.Age)
         end
 
-        local age = getServerAge(found)
-        local hours = math.floor(age / 3600)
-        local minutes = math.floor((age % 3600) / 60)
-        Notify("⏳ Найден сервер: " .. foundName .. " (" .. hours .. "ч " .. minutes .. "м)")
+        Notify("✅ Список выведен в консоль!")
+    end
 
-        -- Открываем меню (если нужно)
-        wait(1.5)
+    -- ========== ХОП НА СТАРЫЙ СЕРВЕР (вручную) ==========
 
-        local serverButton = findServerJoinButton(foundName)
-        if serverButton then
-            Notify("✅ Найдена кнопка Join! Клик...")
-            clickButton(serverButton)
-            wait(1)
-            Notify("✅ Клик выполнен.")
-        else
-            Notify("❌ Кнопка не найдена. Попробуй перезапустить.")
-            print("Имя сервера для поиска:", foundName)
-        end
+    local function hopToOldServer()
+        Notify("🔄 Открываю меню серверов...")
+        pcall(function()
+            -- Здесь можно добавить открытие меню, если есть кнопка
+            -- Но проще открыть вручную
+        end)
+        Notify("✅ Открой меню серверов и выбери нужный по консоли.")
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🕐 4 часа (04:00:00)", function() hopToAge(4) end, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🕐 5 часов (05:00:00)", function() hopToAge(5) end, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🕐 6 часов (06:00:00)", function() hopToAge(6) end, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🕐 8 часов (08:00:00)", function() hopToAge(8) end, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🕐 10 часов (10:00:00)", function() hopToAge(10) end, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🕐 12 часов (12:00:00)", function() hopToAge(12) end, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "📋 Показать список серверов в консоли", listServers, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🔄 Открыть меню серверов (вручную)", hopToOldServer, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
     print("6. Кнопки добавлены")
@@ -299,5 +216,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v7.9 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v8.0 загружен! Нажми на 🍎")
 end
