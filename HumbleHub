@@ -1,0 +1,169 @@
+-- =============================================
+--  BLOX HUB v9.0 (Меню + сервер-хоп через JobId)
+-- =============================================
+
+print("🍎 Fruit Hub v9.0 загружен")
+
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ========== HTTP-ЗАПРОСЫ ==========
+
+local function httpGet(url)
+    local success, result = pcall(function() return http.request({ Url = url, Method = "GET" }) end)
+    if success and result then return result.Body end
+    local success2, result2 = pcall(function() return syn.request({ Url = url, Method = "GET" }) end)
+    if success2 and result2 then return result2.Body end
+    local success3, result3 = pcall(function() return game:HttpGet(url) end)
+    if success3 and result3 then return result3 end
+    return nil
+end
+
+-- ========== СЕРВЕР-ХОП ЧЕРЕЗ JOBID ==========
+
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local placeId = game.PlaceId
+
+local function getServers()
+    local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
+    local response = httpGet(url)
+    if not response then
+        print("❌ Не удалось получить список серверов")
+        return nil
+    end
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(response)
+    end)
+    if not success or not data or not data.data then
+        print("❌ Ошибка парсинга")
+        return nil
+    end
+    return data.data
+end
+
+local function hopToRandomServer()
+    print("🔄 Сервер-хоп...")
+    local servers = getServers()
+    if not servers or #servers == 0 then
+        print("❌ Не удалось получить список серверов")
+        return
+    end
+
+    local currentJobId = game.JobId
+    local targetServer = nil
+    for _, server in pairs(servers) do
+        if server.id ~= currentJobId then
+            targetServer = server
+            break
+        end
+    end
+
+    if targetServer then
+        print("✅ Телепорт на сервер:", targetServer.id)
+        TeleportService:TeleportToPlaceInstance(placeId, targetServer.id, player)
+    else
+        print("❌ Не найдено других серверов")
+    end
+end
+
+-- ========== GUI (красивое меню) ==========
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FruitHub"
+screenGui.Parent = playerGui
+screenGui.ResetOnSpawn = false
+
+-- Главное окно
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.Size = UDim2.new(0, 320, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+local cornerMain = Instance.new("UICorner")
+cornerMain.Parent = mainFrame
+cornerMain.CornerRadius = UDim.new(0, 16)
+
+-- Заголовок
+local title = Instance.new("TextLabel")
+title.Parent = mainFrame
+title.Size = UDim2.new(1, 0, 0, 45)
+title.Text = "🍎 Fruit Hub v9.0"
+title.TextColor3 = Color3.fromRGB(255, 215, 0)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 24
+
+-- Контейнер для кнопок
+local container = Instance.new("Frame")
+container.Parent = mainFrame
+container.Size = UDim2.new(1, -20, 1, -65)
+container.Position = UDim2.new(0, 10, 0, 55)
+container.BackgroundTransparency = 1
+
+local function AddButton(text, callback, color)
+    local btn = Instance.new("TextButton")
+    btn.Parent = container
+    btn.Size = UDim2.new(1, 0, 0, 45)
+    local count = #container:GetChildren()
+    btn.Position = UDim2.new(0, 0, 0, count * 50 + 5)
+    btn.Text = text
+    btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 18
+    btn.BorderSizePixel = 0
+    btn.BackgroundTransparency = 0.2
+
+    local cornerBtn = Instance.new("UICorner")
+    cornerBtn.Parent = btn
+    cornerBtn.CornerRadius = UDim.new(0, 8)
+
+    btn.MouseButton1Click:Connect(callback)
+end
+
+-- Кнопки
+AddButton("🔄 Сервер-хоп (быстрый)", function()
+    hopToRandomServer()
+end, Color3.fromRGB(0, 180, 100))
+
+AddButton("🔄 Перезапустить игру", function()
+    game:Shutdown()
+end, Color3.fromRGB(200, 60, 60))
+
+-- ========== КНОПКА-ЛОГОТИП (открытие/закрытие) ==========
+
+local toggleButton = Instance.new("ImageButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Parent = screenGui
+toggleButton.Size = UDim2.new(0, 60, 0, 60)
+toggleButton.Position = UDim2.new(0, 15, 0, 100)
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+toggleButton.BackgroundTransparency = 0
+toggleButton.Image = "rbxassetid://1234567890"
+toggleButton.ImageTransparency = 1
+
+local cornerToggle = Instance.new("UICorner")
+cornerToggle.Parent = toggleButton
+cornerToggle.CornerRadius = UDim.new(1, 0)
+
+local labelToggle = Instance.new("TextLabel")
+labelToggle.Parent = toggleButton
+labelToggle.Size = UDim2.new(1, 0, 1, 0)
+labelToggle.Text = "🍎"
+labelToggle.TextScaled = true
+labelToggle.TextColor3 = Color3.fromRGB(0, 0, 0)
+labelToggle.BackgroundTransparency = 1
+labelToggle.Font = Enum.Font.SourceSansBold
+
+local menuVisible = true
+toggleButton.MouseButton1Click:Connect(function()
+    menuVisible = not menuVisible
+    mainFrame.Visible = menuVisible
+end)
+
+print("✅ Fruit Hub v9.0 готов! Нажми на 🍎 для открытия меню.")
