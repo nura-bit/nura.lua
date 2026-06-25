@@ -1,84 +1,53 @@
 -- =============================================
---  HUMBLEHUB v1.2 (Простой хоп через GUI)
+--  HUMBLEHUB v1.4 (Без перезапуска)
 -- =============================================
 
-print("🍎 HumbleHub v1.2 загружен")
+print("🍎 HumbleHub v1.4 загружен")
 
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ========== ФУНКЦИЯ ХОПА ==========
+-- ========== ГЛАВНАЯ ФУНКЦИЯ ХОПА ==========
 
 local function hop()
     print("🔄 Хоп...")
-    
-    -- 1. Ищем кнопку "Сервера" и кликаем
-    local serverButton = nil
+
+    -- Ищем кнопку "ServerHop"
+    local serverHopButton = nil
     for _, child in pairs(playerGui:GetDescendants()) do
-        if child:IsA("TextButton") or child:IsA("ImageButton") then
-            local hasText, text = pcall(function() return child.Text end)
-            if hasText and type(text) == "string" then
-                if string.find(text, "Server") or string.find(text, "Сервер") or string.find(text, "Сервера") then
-                    serverButton = child
-                    break
-                end
+        if child:IsA("TextButton") and child.Name == "ServerHop" then
+            serverHopButton = child
+            break
+        end
+    end
+
+    if serverHopButton then
+        print("✅ Найдена кнопка ServerHop, клик...")
+        serverHopButton:Click()
+        wait(0.5)
+        -- Дополнительный клик через координаты для надёжности
+        pcall(function()
+            local pos = serverHopButton.AbsolutePosition
+            local size = serverHopButton.AbsoluteSize
+            if pos and size then
+                mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
             end
-        end
+        end)
+        print("✅ Клик выполнен.")
+    else
+        print("❌ Кнопка ServerHop не найдена. Сообщите разработчику.")
+        -- Никакого перезапуска!
     end
-
-    if not serverButton then
-        print("❌ Кнопка 'Сервера' не найдена, перезапуск...")
-        game:Shutdown()
-        return
-    end
-
-    serverButton:Click()
-    print("✅ Меню открыто")
-    wait(1.5) -- ждём загрузки списка
-
-    -- 2. Ищем все кнопки "Join" и кликаем по случайной
-    local joinButtons = {}
-    for _, child in pairs(playerGui:GetDescendants()) do
-        if child:IsA("TextButton") and child.Visible then
-            local hasText, text = pcall(function() return child.Text end)
-            if hasText and type(text) == "string" then
-                if string.find(text, "Join") or string.find(text, "Играть") or string.find(text, "Присоединиться") then
-                    table.insert(joinButtons, child)
-                end
-            end
-        end
-    end
-
-    if #joinButtons == 0 then
-        print("❌ Кнопки 'Join' не найдены, перезапуск...")
-        game:Shutdown()
-        return
-    end
-
-    local selected = joinButtons[math.random(1, #joinButtons)]
-    print("✅ Нажатие на Join...")
-    selected:Click()
-    wait(0.5)
-
-    -- Дополнительный клик через координаты
-    pcall(function()
-        local pos = selected.AbsolutePosition
-        local size = selected.AbsoluteSize
-        if pos and size then
-            mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
-        end
-    end)
-
-    print("✅ Хоп выполнен!")
 end
 
--- ========== GUI ==========
+-- ========== GUI (МЕНЮ) ==========
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "HumbleHub"
 screenGui.Parent = playerGui
 screenGui.ResetOnSpawn = false
 
+-- Главное окно
 local mainFrame = Instance.new("Frame")
 mainFrame.Parent = screenGui
 mainFrame.Size = UDim2.new(0, 280, 0, 180)
@@ -129,7 +98,7 @@ local function AddButton(text, callback, color)
 end
 
 AddButton("🔄 Сервер-хоп", hop, Color3.fromRGB(0, 180, 100))
-AddButton("🔄 Перезапустить", function() game:Shutdown() end, Color3.fromRGB(200, 60, 60))
+AddButton("🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 60, 60))
 
 -- Кнопка-логотип
 local toggleButton = Instance.new("ImageButton")
@@ -161,4 +130,4 @@ toggleButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = menuVisible
 end)
 
-print("✅ HumbleHub v1.2 загружен! Нажми на 🍎")
+print("✅ HumbleHub v1.4 загружен! Нажми на 🍎")
