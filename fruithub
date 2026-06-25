@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v8.0 (Список серверов с возрастом)
+--  BLOX HUB v8.2 (Правильный хоп через меню)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 300)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -150)
+    MainFrame.Size = UDim2.new(0, 380, 0, 200)
+    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -100)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v8.0 (Список серверов)"
+    Title.Text = "🍎 Fruit Hub v8.2 (Хоп через меню)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -112,93 +112,108 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== HTTP-ЗАПРОСЫ ==========
+    -- ========== ХОП ЧЕРЕЗ МЕНЮ ==========
 
-    local function httpGet(url)
-        local success, result = pcall(function() return http.request({ Url = url, Method = "GET" }) end)
-        if success and result then return result.Body end
-        local success2, result2 = pcall(function() return syn.request({ Url = url, Method = "GET" }) end)
-        if success2 and result2 then return result2.Body end
-        local success3, result3 = pcall(function() return game:HttpGet(url) end)
-        if success3 and result3 then return result3 end
-        return nil
-    end
+    local function hopThroughMenu()
+        Notify("🔄 Начинаю хоп через меню...")
 
-    local function getServers()
-        local placeId = game.PlaceId
-        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
-        local response = httpGet(url)
-        if not response then
-            Notify("❌ Не удалось получить список серверов")
-            return nil
-        end
-        local success, data = pcall(function()
-            return game:GetService("HttpService"):JSONDecode(response)
-        end)
-        if not success or not data or not data.data then
-            Notify("❌ Ошибка парсинга")
-            return nil
-        end
-        return data.data
-    end
+        -- 1. Ищем кнопку "Сервера" в правом верхнем углу
+        local playerGui = Player:WaitForChild("PlayerGui")
+        local serverButton = nil
 
-    local function getServerAge(server)
-        local created = server.created
-        if not created then return 0 end
-        local now = os.time(os.date("!*t"))
-        local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
-        if not year then return 0 end
-        local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
-        local serverTime = os.time(timeTable)
-        return os.difftime(now, serverTime)
-    end
-
-    -- ========== ВЫВОД СПИСКА СЕРВЕРОВ ==========
-
-    local function listServers()
-        Notify("🔍 Получаю список серверов... Смотри консоль!")
-        local servers = getServers()
-        if not servers then return end
-
-        print("=== СПИСОК СЕРВЕРОВ (возраст в формате ЧЧ:ММ:СС) ===")
-        local serverList = {}
-        for _, server in pairs(servers) do
-            local age = getServerAge(server)
-            local hours = math.floor(age / 3600)
-            local minutes = math.floor((age % 3600) / 60)
-            local secs = math.floor(age % 60)
-            local ageStr = string.format("%02d:%02d:%02d", hours, minutes, secs)
-            local name = server.name or "Без имени"
-            table.insert(serverList, {Name = name, Age = ageStr, AgeSec = age})
-            print(name, "| Возраст:", ageStr)
+        for _, child in pairs(playerGui:GetDescendants()) do
+            if child:IsA("TextButton") or child:IsA("ImageButton") then
+                local hasText, text = pcall(function() return child.Text end)
+                if hasText and type(text) == "string" then
+                    if string.find(text, "Server") or string.find(text, "Сервер") or string.find(text, "Сервера") then
+                        serverButton = child
+                        break
+                    end
+                end
+            end
         end
 
-        -- Сортировка по возрасту (по убыванию, чтобы видеть старые сервера)
-        table.sort(serverList, function(a, b) return a.AgeSec > b.AgeSec end)
-
-        -- Вывод отсортированного списка
-        print("=== ОТСОРТИРОВАНО ПО ВОЗРАСТУ (от старых к новым) ===")
-        for _, info in pairs(serverList) do
-            print(info.Name, "| Возраст:", info.Age)
+        if not serverButton then
+            Notify("❌ Кнопка 'Сервера' не найдена")
+            return
         end
 
-        Notify("✅ Список выведен в консоль!")
-    end
+        -- 2. Кликаем по кнопке "Сервера"
+        pcall(function() serverButton:Click() end)
+        Notify("✅ Открываю меню серверов...")
+        wait(1.5) -- ждём загрузки списка
 
-    -- ========== ХОП НА СТАРЫЙ СЕРВЕР (вручную) ==========
+        -- 3. Ищем в списке серверов название сервера (любого)
+        local serverNameObjects = {}
+        for _, child in pairs(playerGui:GetDescendants()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                local hasText, text = pcall(function() return child.Text end)
+                if hasText and type(text) == "string" and text ~= "" then
+                    -- Ищем строки, похожие на название сервера
+                    if string.find(text, "Server") or string.find(text, "Сервер") or string.find(text, "#") then
+                        table.insert(serverNameObjects, child)
+                    end
+                end
+            end
+        end
 
-    local function hopToOldServer()
-        Notify("🔄 Открываю меню серверов...")
+        if #serverNameObjects == 0 then
+            Notify("❌ Не найдено названий серверов в меню")
+            return
+        end
+
+        -- 4. Выбираем случайный сервер из списка
+        local randomIndex = math.random(1, #serverNameObjects)
+        local serverNameObject = serverNameObjects[randomIndex]
+        Notify("✅ Выбираю сервер: " .. serverNameObject.Text)
+        pcall(function() serverNameObject:Click() end) -- кликаем по названию сервера
+
+        wait(1)
+
+        -- 5. Ищем кнопку "Join" или "Присоединиться" рядом с выбранным сервером
+        local joinButton = nil
+        local parent = serverNameObject.Parent
+        for i = 1, 10 do -- поднимаемся до 10 уровней вверх
+            if not parent then break end
+            for _, child in pairs(parent:GetDescendants()) do
+                if child:IsA("TextButton") or child:IsA("ImageButton") then
+                    local hasText, text = pcall(function() return child.Text end)
+                    if hasText and type(text) == "string" then
+                        if string.find(text, "Join") or string.find(text, "Присоединиться") then
+                            joinButton = child
+                            break
+                        end
+                    end
+                end
+            end
+            if joinButton then break end
+            parent = parent.Parent
+        end
+
+        if not joinButton then
+            Notify("❌ Кнопка 'Join' не найдена")
+            return
+        end
+
+        -- 6. Кликаем по "Join"
+        Notify("✅ Кликаю по Join...")
+        pcall(function() joinButton:Click() end)
+        wait(0.5)
+
+        -- Дополнительный клик через координаты
         pcall(function()
-            -- Здесь можно добавить открытие меню, если есть кнопка
-            -- Но проще открыть вручную
+            local pos = joinButton.AbsolutePosition
+            local size = joinButton.AbsoluteSize
+            if pos and size then
+                mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
+            end
         end)
-        Notify("✅ Открой меню серверов и выбери нужный по консоли.")
+
+        Notify("✅ Хоп выполнен!")
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "📋 Показать список серверов в консоли", listServers, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🔄 Открыть меню серверов (вручную)", hopToOldServer, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🔄 Сервер-хоп (через меню)", hopThroughMenu, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
     print("6. Кнопки добавлены")
@@ -216,5 +231,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v8.0 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v8.2 загружен! Нажми на 🍎")
 end
