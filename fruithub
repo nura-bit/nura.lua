@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v7.3 (Хоп через меню + API)
+--  BLOX HUB v7.4 (Клики по внутриигровому меню)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v7.3 (Меню + API)"
+    Title.Text = "🍎 Fruit Hub v7.4 (Внутриигровое меню)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -153,7 +153,7 @@ local createSuccess, createErr = pcall(function()
         return os.difftime(now, serverTime)
     end
 
-    -- ========== ХОП ЧЕРЕЗ МЕНЮ ==========
+    -- ========== ХОП ЧЕРЕЗ ВНУТРИИГРОВОЕ МЕНЮ ==========
 
     local function hopToAge(targetHours)
         Notify("🔍 Ищем сервер с возрастом ~" .. targetHours .. " ч...")
@@ -164,6 +164,7 @@ local createSuccess, createErr = pcall(function()
         local tolerance = 600 -- ±10 минут
         local found = nil
         local bestDiff = math.huge
+        local foundName = ""
 
         for _, server in pairs(servers) do
             local age = getServerAge(server)
@@ -171,6 +172,7 @@ local createSuccess, createErr = pcall(function()
             if diff < bestDiff then
                 bestDiff = diff
                 found = server
+                foundName = server.name or server.id
             end
         end
 
@@ -182,41 +184,47 @@ local createSuccess, createErr = pcall(function()
         local age = getServerAge(found)
         local hours = math.floor(age / 3600)
         local minutes = math.floor((age % 3600) / 60)
-        Notify("⏳ Найден сервер: " .. hours .. "ч " .. minutes .. "м. Открываем меню...")
+        Notify("⏳ Найден сервер: " .. hours .. "ч " .. minutes .. "м. Ищем в меню...")
 
-        -- Открываем меню выбора сервера
-        pcall(function()
-            game:GetService("GuiService"):OpenPlayerMenu()
-        end)
-
-        wait(1.5)
-
-        -- Ищем кнопку "Play" в CoreGui
-        local coreGui = game:GetService("CoreGui")
-        local playButton = nil
-
-        local function findPlayButton(parent)
-            for _, child in pairs(parent:GetDescendants()) do
-                if child:IsA("TextButton") and (child.Name == "Play" or string.find(child.Name, "Play")) then
-                    return child
-                end
-                if child:IsA("ImageButton") and (child.Name == "Play" or string.find(child.Name, "Play")) then
-                    return child
+        -- Ищем внутриигровое меню серверов
+        local function findServerButton(serverName)
+            local playerGui = Player:WaitForChild("PlayerGui")
+            -- Обходим все элементы GUI
+            for _, gui in pairs(playerGui:GetDescendants()) do
+                if gui:IsA("TextButton") or gui:IsA("ImageButton") then
+                    local text = gui.Text or ""
+                    -- Ищем по имени сервера (может быть неполное совпадение)
+                    if string.find(text, serverName) or string.find(text, "Join") then
+                        return gui
+                    end
                 end
             end
             return nil
         end
 
-        playButton = findPlayButton(coreGui)
-
-        if playButton then
-            Notify("✅ Нажатие на Play...")
+        -- Ищем кнопку сервера по имени
+        local serverButton = findServerButton(foundName)
+        if serverButton then
+            Notify("✅ Найдена кнопка сервера! Клик...")
             pcall(function()
-                playButton:Click()
+                serverButton:Click()
             end)
         else
-            Notify("❌ Кнопка Play не найдена. Перезапуск...")
-            game:Shutdown()
+            -- Если не нашли по имени, пробуем найти любую кнопку "Join" или "Играть"
+            local playerGui = Player:WaitForChild("PlayerGui")
+            for _, gui in pairs(playerGui:GetDescendants()) do
+                if gui:IsA("TextButton") or gui:IsA("ImageButton") then
+                    local text = gui.Text or ""
+                    if string.find(text, "Join") or string.find(text, "Играть") then
+                        Notify("✅ Найдена кнопка Join! Клик...")
+                        pcall(function()
+                            gui:Click()
+                        end)
+                        return
+                    end
+                end
+            end
+            Notify("❌ Не удалось найти кнопку сервера. Попробуй вручную.")
         end
     end
 
@@ -244,5 +252,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v7.3 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v7.4 загружен! Нажми на 🍎")
 end
