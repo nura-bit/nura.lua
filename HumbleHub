@@ -1,86 +1,11 @@
 -- =============================================
---  HUMBLEHUB v1.0 (сервер-хоп через GUI + фильтр игроков)
+--  HUMBLEHUB v1.1 (GUI-клики без HTTP)
 -- =============================================
 
-print("🍎 HumbleHub v1.0 загружен")
+print("🍎 HumbleHub v1.1 загружен")
 
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local placeId = game.PlaceId
-
--- ========== HTTP-ЗАПРОСЫ ==========
-
-local function httpGet(url)
-    local success, result = pcall(function() return http.request({ Url = url, Method = "GET" }) end)
-    if success and result then return result.Body end
-    local success2, result2 = pcall(function() return syn.request({ Url = url, Method = "GET" }) end)
-    if success2 and result2 then return result2.Body end
-    local success3, result3 = pcall(function() return game:HttpGet(url) end)
-    if success3 and result3 then return result3 end
-    return nil
-end
-
--- ========== ПОЛУЧЕНИЕ СПИСКА СЕРВЕРОВ ==========
-
-local function getServers()
-    local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
-    local response = httpGet(url)
-    if not response then
-        print("❌ Не удалось получить список серверов")
-        return nil
-    end
-    local success, data = pcall(function()
-        return HttpService:JSONDecode(response)
-    end)
-    if not success or not data or not data.data then
-        print("❌ Ошибка парсинга")
-        return nil
-    end
-    return data.data
-end
-
--- ========== ПОИСК КНОПКИ "JOIN" ДЛЯ КОНКРЕТНОГО СЕРВЕРА ==========
-
-local function findJoinButtonForServer(serverId)
-    -- Ищем в PlayerGui элемент с текстом, содержащим serverId или имя сервера
-    -- В меню серверов обычно есть список, и у каждого сервера есть кнопка "Join"
-    local playerGui = player:WaitForChild("PlayerGui")
-    local joinButton = nil
-
-    local function searchForJoin(parent)
-        for _, child in pairs(parent:GetChildren()) do
-            -- Проверяем, является ли элемент кнопкой с текстом Join/Присоединиться
-            if child:IsA("TextButton") then
-                local hasText, text = pcall(function() return child.Text end)
-                if hasText and type(text) == "string" then
-                    if string.find(text, "Join") or string.find(text, "Играть") or string.find(text, "Присоединиться") then
-                        -- Проверяем, есть ли рядом текст с serverId (может быть в родителе или соседях)
-                        local parentContainer = child.Parent
-                        if parentContainer then
-                            for _, sibling in pairs(parentContainer:GetChildren()) do
-                                local hasSibText, sibText = pcall(function() return sibling.Text end)
-                                if hasSibText and type(sibText) == "string" then
-                                    if string.find(sibText, serverId) then
-                                        return child
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            -- Рекурсивный обход
-            local found = searchForJoin(child)
-            if found then return found end
-        end
-        return nil
-    end
-
-    joinButton = searchForJoin(playerGui)
-    return joinButton
-end
 
 -- ========== ОТКРЫТИЕ МЕНЮ СЕРВЕРОВ ==========
 
@@ -100,66 +25,52 @@ local function openServerMenu()
     return false
 end
 
--- ========== ОСНОВНАЯ ФУНКЦИЯ ХОПА ==========
+-- ========== ПОИСК КНОПКИ "JOIN" ==========
 
-local function hopToLeastPopulatedServer()
-    print("🔄 Хоп на сервер с наименьшим количеством игроков...")
-
-    -- 1. Получаем список серверов
-    local servers = getServers()
-    if not servers or #servers == 0 then
-        print("❌ Не удалось получить список серверов")
-        return
-    end
-
-    -- 2. Сортируем по количеству игроков (по возрастанию)
-    table.sort(servers, function(a, b)
-        return (a.playing or 0) < (b.playing or 0)
-    end)
-
-    -- 3. Ищем сервер с игроками меньше максимума (не полный)
-    local targetServer = nil
-    local currentJobId = game.JobId
-    for _, server in pairs(servers) do
-        if server.id ~= currentJobId and (server.playing or 0) < (server.maxPlayers or 12) then
-            targetServer = server
-            break
+local function findJoinButton()
+    local playerGui = player:WaitForChild("PlayerGui")
+    -- Ищем все кнопки с текстом Join/Присоединиться/Играть
+    local joinButtons = {}
+    for _, child in pairs(playerGui:GetDescendants()) do
+        if child:IsA("TextButton") and child.Visible then
+            local hasText, text = pcall(function() return child.Text end)
+            if hasText and type(text) == "string" then
+                if string.find(text, "Join") or string.find(text, "Играть") or string.find(text, "Присоединиться") then
+                    table.insert(joinButtons, child)
+                end
+            end
         end
     end
+    return joinButtons
+end
 
-    if not targetServer then
-        print("❌ Не найдено подходящих серверов")
-        return
-    end
+-- ========== ОСНОВНАЯ ФУНКЦИЯ ХОПА ==========
 
-    local serverId = targetServer.id
-    local playerCount = targetServer.playing or 0
-    print("✅ Выбран сервер с " .. playerCount .. " игроками")
-
-    -- 4. Открываем меню серверов
+local function hopServer()
+    print("🔄 Открываю меню серверов...")
     if not openServerMenu() then
         print("❌ Не удалось открыть меню серверов")
         return
     end
 
-    wait(1.5) -- ждём загрузки списка
+    wait(2) -- ждём загрузки списка
 
-    -- 5. Ищем кнопку Join для этого сервера
-    local joinButton = findJoinButtonForServer(serverId)
-    if not joinButton then
-        print("❌ Не найдена кнопка Join для сервера " .. serverId)
+    local joinButtons = findJoinButton()
+    if #joinButtons == 0 then
+        print("❌ Кнопки Join не найдены")
         return
     end
 
-    -- 6. Кликаем по Join
+    -- Выбираем случайную кнопку (или первую)
+    local selected = joinButtons[math.random(1, #joinButtons)]
     print("✅ Нажатие на Join...")
-    joinButton:Click()
+    selected:Click()
     wait(0.5)
 
-    -- Дополнительный клик через координаты (на всякий случай)
+    -- Дополнительный клик через координаты
     pcall(function()
-        local pos = joinButton.AbsolutePosition
-        local size = joinButton.AbsoluteSize
+        local pos = selected.AbsolutePosition
+        local size = selected.AbsoluteSize
         if pos and size then
             mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
         end
@@ -191,7 +102,7 @@ cornerMain.CornerRadius = UDim.new(0, 16)
 local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 45)
-title.Text = "🍎 HumbleHub v1.0"
+title.Text = "🍎 HumbleHub v1.1"
 title.TextColor3 = Color3.fromRGB(255, 215, 0)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.SourceSansBold
@@ -224,8 +135,8 @@ local function AddButton(text, callback, color)
     btn.MouseButton1Click:Connect(callback)
 end
 
-AddButton("🔄 Сервер-хоп (наименее заполненный)", function()
-    hopToLeastPopulatedServer()
+AddButton("🔄 Сервер-хоп (GUI)", function()
+    hopServer()
 end, Color3.fromRGB(0, 180, 100))
 
 AddButton("🔄 Перезапустить игру", function()
@@ -262,4 +173,4 @@ toggleButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = menuVisible
 end)
 
-print("✅ HumbleHub v1.0 загружен! Нажми на 🍎 для открытия меню.")
+print("✅ HumbleHub v1.1 загружен! Нажми на 🍎 для открытия меню.")
