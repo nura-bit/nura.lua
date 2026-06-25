@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v5.7 (Точный возраст сервера)
+--  BLOX HUB v5.8 (Сканер времени сервера)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -40,7 +40,6 @@ local createSuccess, createErr = pcall(function()
     screenGui.IgnoreGuiInset = true
     print("3.1 ScreenGui создан")
 
-    -- Круглая кнопка-логотип
     local toggleButton = Instance.new("ImageButton")
     toggleButton.Name = "ToggleButton"
     toggleButton.Parent = screenGui
@@ -64,11 +63,10 @@ local createSuccess, createErr = pcall(function()
     label.Font = Enum.Font.SourceSansBold
     print("4. Кнопка создана")
 
-    -- Главное меню
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 380, 0, 280)
-    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -140)
+    MainFrame.Size = UDim2.new(0, 420, 0, 320)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -82,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v5.7"
+    Title.Text = "🍎 Fruit Hub v5.8"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -114,19 +112,62 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== ВОЗРАСТ СЕРВЕРА (прямо из DistributedGameTime) ==========
+    -- ========== СКАНЕР ВРЕМЕНИ СЕРВЕРА ==========
 
-    local function showServerUptime()
-        local seconds = workspace.DistributedGameTime
-        local hours = math.floor(seconds / 3600)
-        local minutes = math.floor((seconds % 3600) / 60)
-        local secs = math.floor(seconds % 60)
-        local uptimeStr = string.format("%02dч %02dм %02dс", hours, minutes, secs)
-        Notify("🕐 Server Uptime: " .. uptimeStr)
-        print("Server Uptime:", uptimeStr)
+    local function scanForServerTime()
+        Notify("🔍 Начинаем сканирование... Смотри консоль!")
+        print("=== СКАНИРОВАНИЕ ВРЕМЕНИ СЕРВЕРА ===")
+        local foundNumbers = {}
+
+        local function scanObject(obj, path)
+            -- Проверяем свойства
+            local success, props = pcall(function() return obj:GetProperties() end)
+            if success then
+                for _, prop in pairs(props) do
+                    local val = obj[prop]
+                    if type(val) == "number" and val > 1000 then
+                        print("Число:", val, "путь:", path .. "." .. prop)
+                        table.insert(foundNumbers, {path = path .. "." .. prop, value = val})
+                    end
+                end
+            end
+            -- Проверяем детей
+            for _, child in pairs(obj:GetChildren()) do
+                scanObject(child, path .. "." .. child.Name)
+            end
+        end
+
+        -- Сканируем основные контейнеры
+        local containers = {
+            game:GetService("ReplicatedStorage"),
+            game:GetService("Workspace"),
+            Player,
+            game:GetService("GameService"),
+            game:GetService("Players")
+        }
+        for _, container in pairs(containers) do
+            pcall(function() scanObject(container, container.Name) end)
+        end
+
+        -- Сканируем RemoteEvent (через подключение)
+        for _, obj in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                obj.OnClientEvent:Connect(function(...)
+                    local args = {...}
+                    for _, arg in ipairs(args) do
+                        if type(arg) == "number" and arg > 1000 then
+                            print("RemoteEvent число:", arg, "из события", obj.Name)
+                        end
+                    end
+                end)
+            end
+        end
+
+        print("=== СКАНИРОВАНИЕ ЗАВЕРШЕНО ===")
+        Notify("✅ Сканирование завершено! Проверь консоль.")
     end
 
-    -- ========== ПРОСТОЙ ХОП (без проверок) ==========
+    -- ========== ХОП И ПЕРЕЗАПУСК ==========
 
     local function hopServer()
         Notify("🔄 Переключение сервера...")
@@ -150,7 +191,7 @@ local createSuccess, createErr = pcall(function()
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🕐 Server Uptime", showServerUptime, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🔍 Сканировать время сервера", scanForServerTime, Color3.fromRGB(255, 200, 50))
     AddButton(TabContainer, "🔄 Переключить сервер", hopServer, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
@@ -169,5 +210,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v5.7 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v5.8 загружен! Нажми на 🍎")
 end
