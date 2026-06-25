@@ -1,0 +1,220 @@
+-- =============================================
+--  BLOX HUB v2.0 (Delta Optimized)
+--  Круглая кнопка-логотип + скрываемое меню
+-- =============================================
+
+local Player = game.Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local TeleportService = game:GetService("TeleportService")
+local VirtualInput = game:GetService("VirtualInputManager") -- для симуляции клавиш (если поддерживается)
+
+wait(2)
+
+-- ========== СОЗДАНИЕ КРУГЛОЙ КНОПКИ ==========
+local toggleButton = Instance.new("ImageButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Parent = CoreGui
+toggleButton.Size = UDim2.new(0, 60, 0, 60)
+toggleButton.Position = UDim2.new(0, 10, 0, 100) -- левый верхний угол
+toggleButton.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+toggleButton.BackgroundTransparency = 0.2
+toggleButton.Image = "rbxassetid://1234567890" -- можно поставить свой логотип, или оставить просто цвет
+toggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.ImageTransparency = 0.5
+-- Сделаем круглой через Corner
+local corner = Instance.new("UICorner")
+corner.Parent = toggleButton
+corner.CornerRadius = UDim.new(1, 0) -- круг
+
+-- Надпись на кнопке (можно просто звёздочку)
+local label = Instance.new("TextLabel")
+label.Parent = toggleButton
+label.Size = UDim2.new(1, 0, 1, 0)
+label.Text = "⭐"
+label.TextScaled = true
+label.TextColor3 = Color3.fromRGB(255, 255, 255)
+label.BackgroundTransparency = 1
+label.Font = Enum.Font.SourceSansBold
+
+-- ========== ГЛАВНОЕ МЕНЮ (скрыто по умолчанию) ==========
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = CoreGui
+MainFrame.Size = UDim2.new(0, 380, 0, 450)
+MainFrame.Position = UDim2.new(0.5, -190, 0.5, -225)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BackgroundTransparency = 0.15
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = false -- скрыто до нажатия
+
+-- Скругление для меню
+local cornerMain = Instance.new("UICorner")
+cornerMain.Parent = MainFrame
+cornerMain.CornerRadius = UDim.new(0, 12)
+
+-- Заголовок с названием
+local Title = Instance.new("TextLabel")
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "⭐ Blox Hub v2.0"
+Title.TextColor3 = Color3.fromRGB(255, 215, 0)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 24
+
+-- Контейнер для вкладок (простые кнопки)
+local TabContainer = Instance.new("Frame")
+TabContainer.Parent = MainFrame
+TabContainer.Size = UDim2.new(1, -20, 1, -60)
+TabContainer.Position = UDim2.new(0, 10, 0, 50)
+TabContainer.BackgroundTransparency = 1
+
+-- Функция создания кнопки
+local function AddButton(parent, text, callback, color)
+    local btn = Instance.new("TextButton")
+    btn.Parent = parent
+    btn.Size = UDim2.new(1, 0, 0, 38)
+    local count = #parent:GetChildren()
+    btn.Position = UDim2.new(0, 0, 0, count * 42 + 5)
+    btn.Text = text
+    btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 18
+    btn.BorderSizePixel = 0
+    btn.BackgroundTransparency = 0.3
+    local cornerBtn = Instance.new("UICorner")
+    cornerBtn.Parent = btn
+    cornerBtn.CornerRadius = UDim.new(0, 6)
+    btn.MouseButton1Click:Connect(callback)
+end
+
+-- ========== ФУНКЦИИ ==========
+
+-- 1. Время сервера (работает)
+local function ShowServerTime()
+    local seconds = workspace.DistributedGameTime
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = math.floor(seconds % 60)
+    local msg = string.format("🕐 %02d:%02d:%02d", h, m, s)
+    print(msg)
+    Player:Chat(msg)
+end
+
+-- 2. Поиск сервера :59 (работает)
+local function FindServerWith59()
+    local seconds = workspace.DistributedGameTime
+    local m = math.floor((seconds % 3600) / 60)
+    if m == 59 then
+        Player:Chat("✅ Уже на сервере с :59!")
+        return true
+    else
+        Player:Chat("⏳ Переход на другой сервер...")
+        TeleportService:Teleport(game.PlaceId, Player)
+        return false
+    end
+end
+
+-- 3. Авто-фарм (улучшенный – с ударом)
+local farming = false
+local farmCoroutine = nil
+
+local function StartFarm()
+    if farming then return end
+    farming = true
+    farmCoroutine = coroutine.create(function()
+        while farming do
+            local char = Player.Character
+            if not char then wait(1) break end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then wait(1) break end
+
+            -- Ищем мобов
+            local mobs = {}
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Name ~= Player.Name then
+                    if v:FindFirstChild("HumanoidRootPart") then
+                        table.insert(mobs, v)
+                    end
+                end
+            end
+            if #mobs == 0 then 
+                wait(1)
+            else
+                table.sort(mobs, function(a,b)
+                    return (a.HumanoidRootPart.Position - hrp.Position).Magnitude < 
+                           (b.HumanoidRootPart.Position - hrp.Position).Magnitude
+                end)
+                local target = mobs[1]
+                if target and target.Humanoid.Health > 0 then
+                    -- Подходим к мобу
+                    hrp.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                    wait(0.2)
+                    -- Попытка нанести удар (симуляция клавиши "1" или клика)
+                    pcall(function()
+                        -- Для Delta можно попробовать эмулировать касание
+                        -- Или используем VirtualInputManager (если поддерживается)
+                        if VirtualInput then
+                            VirtualInput:SendKeyEvent(true, "1", false, game)
+                            wait(0.1)
+                            VirtualInput:SendKeyEvent(false, "1", false, game)
+                        else
+                            -- Альтернатива: нажать кнопку мыши (для ПК экзекуторов)
+                            mouse1click() -- если есть
+                        end
+                    end)
+                end
+            end
+            wait(0.5)
+        end
+    end)
+    coroutine.resume(farmCoroutine)
+    Player:Chat("⚔️ Фарм включён")
+end
+
+local function StopFarm()
+    farming = false
+    Player:Chat("⛔ Фарм остановлен")
+end
+
+-- 4. Телепорты (предустановленные точки)
+local teleports = {
+    ["Центр"] = Vector3.new(0, 10, 0),
+    ["Остров джунглей"] = Vector3.new(1000, 10, 1000), -- пример
+    ["Пляж"] = Vector3.new(-500, 10, 500),
+}
+
+local function TeleportTo(pos)
+    local char = Player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = CFrame.new(pos)
+        Player:Chat("📍 Телепорт в " .. tostring(pos))
+    end
+end
+
+-- ========== СОЗДАНИЕ КНОПОК В МЕНЮ ==========
+-- Вкладка "Основное"
+AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
+AddButton(TabContainer, "🔍 Найти сервер :59", FindServerWith59, Color3.fromRGB(70, 130, 180))
+AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
+AddButton(TabContainer, "⛔ Остановить фарм", StopFarm, Color3.fromRGB(80, 200, 80))
+
+-- Вкладка "Телепорты" (добавим отдельно кнопки)
+for name, pos in pairs(teleports) do
+    AddButton(TabContainer, "📍 " .. name, function() TeleportTo(pos) end, Color3.fromRGB(100, 150, 200))
+end
+
+-- ========== ЛОГИКА ОТКРЫТИЯ/ЗАКРЫТИЯ ==========
+local menuVisible = false
+
+toggleButton.MouseButton1Click:Connect(function()
+    menuVisible = not menuVisible
+    MainFrame.Visible = menuVisible
+    -- Анимация (можно добавить TweenService, но для простоты оставим так)
+end)
+
+-- Также можно закрыть меню, если кликнуть вне его (опционально)
+-- Но для простоты оставим только по кнопке
+
+print("✅ Blox Hub v2.0 загружен! Нажми на ⭐ для открытия меню.")
