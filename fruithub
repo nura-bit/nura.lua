@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v7.1 (Аптайм через RemoteEvent)
+--  BLOX HUB v7.2 (Хоп по возрасту сервера через API)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 380, 0, 260)
-    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -130)
+    MainFrame.Size = UDim2.new(0, 420, 0, 500)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -250)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v7.1"
+    Title.Text = "🍎 Fruit Hub v7.2 (Хоп по возрасту)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -112,102 +112,88 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== ПЕРЕХВАТЧИК REMOTEEVENT ==========
+    -- ========== HTTP-ЗАПРОСЫ ==========
 
-    local serverStartTime = nil
-    local isHooking = false
-
-    local function hookServerTime()
-        if isHooking then return end
-        isHooking = true
-        Notify("⏳ Подключаюсь к RemoteEvent...")
-
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        local minTime = math.huge
-
-        local function processNumber(num)
-            if type(num) == "number" and num > 1e9 then
-                if num < minTime then minTime = num end
-            end
-        end
-
-        -- Подключаемся ко всем RemoteEvent
-        for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
-            if obj:IsA("RemoteEvent") then
-                obj.OnClientEvent:Connect(function(...)
-                    local args = {...}
-                    for _, arg in pairs(args) do
-                        processNumber(arg)
-                    end
-                    if minTime < math.huge and not serverStartTime then
-                        serverStartTime = minTime
-                        local age = os.time() - serverStartTime
-                        local hours = math.floor(age / 3600)
-                        local minutes = math.floor((age % 3600) / 60)
-                        local secs = math.floor(age % 60)
-                        Notify("✅ Время старта получено: " .. string.format("%02d:%02d:%02d", hours, minutes, secs))
-                        isHooking = false
-                    end
-                end)
-            end
-        end
-
-        -- Если через 15 секунд не получили, пробуем DistributedGameTime
-        wait(15)
-        if not serverStartTime then
-            Notify("⚠️ Не удалось получить время через RemoteEvent")
-            isHooking = false
-        end
+    local function httpGet(url)
+        local success, result = pcall(function() return http.request({ Url = url, Method = "GET" }) end)
+        if success and result then return result.Body end
+        local success2, result2 = pcall(function() return syn.request({ Url = url, Method = "GET" }) end)
+        if success2 and result2 then return result2.Body end
+        local success3, result3 = pcall(function() return game:HttpGet(url) end)
+        if success3 and result3 then return result3 end
+        return nil
     end
 
-    -- ========== ПОКАЗАТЬ АПТАЙМ ==========
-
-    local function showUptime()
-        if not serverStartTime then
-            Notify("⏳ Время старта не известно. Подключаюсь...")
-            hookServerTime()
-            wait(3)
-            if not serverStartTime then
-                Notify("❌ Не удалось определить аптайм")
-                return
-            end
+    local function getServers()
+        local placeId = game.PlaceId
+        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
+        local response = httpGet(url)
+        if not response then
+            Notify("❌ Не удалось получить список серверов")
+            return nil
         end
-
-        local age = os.time() - serverStartTime
-        local hours = math.floor(age / 3600)
-        local minutes = math.floor((age % 3600) / 60)
-        local secs = math.floor(age % 60)
-        local uptimeStr = string.format("%02dч %02dм %02dс", hours, minutes, secs)
-        Notify("🕐 Аптайм сервера: " .. uptimeStr)
-        print("Аптайм сервера:", uptimeStr)
-    end
-
-    -- ========== ХОП ==========
-
-    local function hopServer()
-        Notify("🔄 Переключение сервера...")
-        pcall(function()
-            game:GetService("GuiService"):OpenPlayerMenu()
+        local success, data = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(response)
         end)
-        wait(1)
-        local coreGui = game:GetService("CoreGui")
-        local playButton = nil
-        for _, child in pairs(coreGui:GetDescendants()) do
-            if child:IsA("TextButton") and string.find(child.Name, "Play") then
-                playButton = child
-                break
+        if not success or not data or not data.data then
+            Notify("❌ Ошибка парсинга")
+            return nil
+        end
+        return data.data
+    end
+
+    -- Вычисляем возраст сервера в секундах (по полю created)
+    local function getServerAge(server)
+        local created = server.created
+        if not created then return 0 end
+        local now = os.time(os.date("!*t")) -- UTC
+        local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+        if not year then return 0 end
+        local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
+        local serverTime = os.time(timeTable)
+        return os.difftime(now, serverTime)
+    end
+
+    -- ========== ХОП ПО ЗАДАННОМУ ВОЗРАСТУ (В ЧАСАХ) ==========
+
+    local function hopToAge(targetHours)
+        Notify("🔍 Ищем сервер с возрастом около " .. targetHours .. " ч...")
+        local servers = getServers()
+        if not servers then return end
+
+        local targetAge = targetHours * 3600
+        local tolerance = 600 -- ±10 минут
+        local found = nil
+        local bestDiff = math.huge
+
+        for _, server in pairs(servers) do
+            local age = getServerAge(server)
+            local diff = math.abs(age - targetAge)
+            if diff < bestDiff then
+                bestDiff = diff
+                found = server
             end
         end
-        if playButton then
-            pcall(function() playButton:Click() end)
+
+        if found then
+            local age = getServerAge(found)
+            local hours = math.floor(age / 3600)
+            local minutes = math.floor((age % 3600) / 60)
+            Notify("⏳ Найден сервер с возрастом " .. hours .. "ч " .. minutes .. "м. Телепорт...")
+            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, found.id, Player)
         else
-            game:Shutdown()
+            Notify("❌ Сервер с возрастом ~" .. targetHours .. "ч не найден")
         end
     end
 
-    -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🕐 Аптайм сервера", showUptime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🔄 Переключить сервер", hopServer, Color3.fromRGB(0, 200, 100))
+    -- ========== КНОПКИ ДЛЯ РАЗНЫХ ВОЗРАСТОВ ==========
+
+    AddButton(TabContainer, "🕐 4 часа (04:00:00)", function() hopToAge(4) end, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🕐 5 часов (05:00:00)", function() hopToAge(5) end, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🕐 6 часов (06:00:00)", function() hopToAge(6) end, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🕐 8 часов (08:00:00)", function() hopToAge(8) end, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🕐 10 часов (10:00:00)", function() hopToAge(10) end, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🕐 12 часов (12:00:00)", function() hopToAge(12) end, Color3.fromRGB(70, 130, 180))
     AddButton(TabContainer, "🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
     print("6. Кнопки добавлены")
@@ -219,17 +205,11 @@ local createSuccess, createErr = pcall(function()
         print("Клик по кнопке, меню видимо =", menuVisible)
     end)
 
-    -- Автоматически пытаемся получить время при загрузке
-    wait(2)
-    if not serverStartTime then
-        hookServerTime()
-    end
-
     print("7. Обработчик клика установлен")
 end)
 
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v7.1 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v7.2 загружен! Нажми на 🍎")
 end
