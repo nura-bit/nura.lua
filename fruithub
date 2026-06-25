@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v5.4 (Авто-переключение через меню)
+--  BLOX HUB v5.6 (Отображение возраста сервера)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -17,7 +17,7 @@ local function Notify(text)
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Fruit Hub",
             Text = text,
-            Duration = 2
+            Duration = 3
         })
     end)
 end
@@ -67,8 +67,8 @@ local createSuccess, createErr = pcall(function()
     -- Главное меню
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 380, 0, 280)
-    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -140)
+    MainFrame.Size = UDim2.new(0, 380, 0, 320)
+    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -160)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -82,7 +82,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v5.4"
+    Title.Text = "🍎 Fruit Hub v5.6"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -114,57 +114,133 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== АВТО-ПЕРЕКЛЮЧЕНИЕ ЧЕРЕЗ МЕНЮ ==========
+    -- ========== ПОИСК ВРЕМЕНИ СТАРТА СЕРВЕРА ==========
 
-    local function switchServerViaMenu()
-        Notify("🔄 Открываем меню выбора сервера...")
-        -- Открываем меню (это стандартный метод Roblox)
-        pcall(function()
-            game:GetService("GuiService"):OpenPlayerMenu()
-        end)
+    local serverStartTime = nil
 
-        -- Ждём появления кнопки "Play" или списка серверов
-        wait(1)
+    local function findServerStartTime()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local foundTime = nil
 
-        -- Ищем кнопку в CoreGui (интерфейс Roblox)
-        local coreGui = game:GetService("CoreGui")
-        local playButton = nil
-
-        -- Поиск по всем объектам в CoreGui (с учётом вложенности)
-        local function findPlayButton(parent)
-            if not parent then return nil end
-            for _, child in pairs(parent:GetDescendants()) do
-                if child:IsA("TextButton") and child.Name == "Play" then
-                    return child
-                end
-                if child:IsA("ImageButton") and child.Name == "Play" then
-                    return child
-                end
-                -- Иногда кнопка называется "PlayButton" или "Join"
-                if child:IsA("TextButton") and string.find(child.Name, "Play") then
-                    return child
-                end
+        -- 1. Ищем в RemoteEvent
+        for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                obj.OnClientEvent:Connect(function(...)
+                    local args = {...}
+                    for _, arg in ipairs(args) do
+                        if type(arg) == "number" and arg > 1e9 then
+                            if not serverStartTime then
+                                serverStartTime = arg
+                                print("Время старта (из RemoteEvent):", os.date("%H:%M:%S", serverStartTime))
+                                Notify("Время старта получено!")
+                            end
+                            return
+                        end
+                    end
+                end)
             end
-            return nil
         end
 
-        playButton = findPlayButton(coreGui)
+        -- 2. Ищем в IntValue / NumberValue
+        for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+            if obj:IsA("IntValue") or obj:IsA("NumberValue") then
+                if type(obj.Value) == "number" and obj.Value > 1e9 then
+                    if not serverStartTime then
+                        serverStartTime = obj.Value
+                        print("Время старта (из Value):", os.date("%H:%M:%S", serverStartTime))
+                        Notify("Время старта получено!")
+                    end
+                    return
+                end
+            end
+        end
 
-        if playButton then
-            Notify("✅ Кнопка 'Play' найдена, нажимаем...")
+        -- 3. Если ничего не нашли, используем DistributedGameTime
+        if not serverStartTime then
+            local now = os.time()
+            local age = workspace.DistributedGameTime
+            if age > 0 then
+                serverStartTime = now - age
+                print("Время старта (приблизительно):", os.date("%H:%M:%S", serverStartTime))
+                Notify("Время старта оценено (приблизительно)")
+            end
+        end
+
+        return serverStartTime
+    end
+
+    -- ========== ФУНКЦИЯ ДЛЯ ОТОБРАЖЕНИЯ ВОЗРАСТА ==========
+
+    local function showServerAge()
+        if not serverStartTime then
+            Notify("⏳ Получаем время старта...")
+            findServerStartTime()
+            wait(2)
+            if not serverStartTime then
+                Notify("❌ Не удалось определить возраст")
+                return
+            end
+        end
+
+        local currentTime = os.time()
+        local age = currentTime - serverStartTime
+        local hours = math.floor(age / 3600)
+        local minutes = math.floor((age % 3600) / 60)
+        local seconds = math.floor(age % 60)
+
+        local ageStr = string.format("%02d:%02d:%02d", hours, minutes, seconds)
+        Notify("🕐 Возраст сервера: " .. ageStr)
+        print("Возраст сервера:", ageStr)
+    end
+
+    -- ========== СЕРВЕР-ХОП ПО ВРЕМЕНИ ==========
+
+    local function hopToFreshServer()
+        if not serverStartTime then
+            Notify("⏳ Ждём получения времени старта...")
+            findServerStartTime()
+            wait(2)
+            if not serverStartTime then
+                Notify("❌ Не удалось получить время. Перезапуск...")
+                game:Shutdown()
+                return
+            end
+        end
+
+        local currentTime = os.time()
+        local age = currentTime - serverStartTime
+        local minutes = math.floor((age % 3600) / 60)
+
+        if minutes >= 0 and minutes <= 2 then
+            Notify("✅ Сервер свежий (" .. minutes .. " мин)")
+            return
+        else
+            Notify("⏳ Возраст " .. minutes .. " мин. Переключаем...")
+            -- Пытаемся через меню
             pcall(function()
-                playButton:Click()
+                game:GetService("GuiService"):OpenPlayerMenu()
             end)
             wait(1)
-            -- После клика игра переключает сервер, скрипт продолжит работу на новом сервере
-        else
-            Notify("❌ Кнопка 'Play' не найдена, пробуем перезапуск...")
-            game:Shutdown()
+            local coreGui = game:GetService("CoreGui")
+            local playButton = nil
+            for _, child in pairs(coreGui:GetDescendants()) do
+                if child:IsA("TextButton") and string.find(child.Name, "Play") then
+                    playButton = child
+                    break
+                end
+            end
+            if playButton then
+                pcall(function() playButton:Click() end)
+            else
+                game:Shutdown()
+            end
         end
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🔄 Переключить сервер (через меню)", switchServerViaMenu, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🕐 Показать возраст сервера", showServerAge, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🔄 Хоп на свежий сервер (0-2 мин)", hopToFreshServer, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🔄 Перезапустить игру (запасной)", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
     print("6. Кнопки добавлены")
 
@@ -181,5 +257,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v5.4 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v5.6 загружен! Нажми на 🍎")
 end
