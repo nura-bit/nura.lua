@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v3.0 (Сервер-хоп через API)
+--  BLOX HUB v3.2 (Сервер-хоп через http.request)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -11,7 +11,6 @@ if not Player then
 end
 print("2. Player найден")
 
--- Уведомления
 local function Notify(text)
     print(text)
     pcall(function()
@@ -41,7 +40,6 @@ local createSuccess, createErr = pcall(function()
     screenGui.IgnoreGuiInset = true
     print("3.1 ScreenGui создан")
 
-    -- Круглая кнопка
     local toggleButton = Instance.new("ImageButton")
     toggleButton.Name = "ToggleButton"
     toggleButton.Parent = screenGui
@@ -65,11 +63,10 @@ local createSuccess, createErr = pcall(function()
     label.Font = Enum.Font.SourceSansBold
     print("4. Кнопка создана")
 
-    -- Главное меню
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 450, 0, 500) -- чуть шире для новых кнопок
-    MainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
+    MainFrame.Size = UDim2.new(0, 450, 0, 520)
+    MainFrame.Position = UDim2.new(0.5, -225, 0.5, -260)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -83,11 +80,11 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 45)
-    Title.Text = "⭐ Blox Hub v3.0 (API Хоп)"
+    Title.Text = "⭐ Blox Hub v3.2"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
-    Title.TextSize = 24
+    Title.TextSize = 26
 
     local TabContainer = Instance.new("Frame")
     TabContainer.Parent = MainFrame
@@ -115,33 +112,53 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== НОВЫЕ ФУНКЦИИ (API ХОП) ==========
+    -- ========== НОВАЯ ФУНКЦИЯ HTTP-ЗАПРОСА (через экзекутор) ==========
 
-    local HttpService = game:GetService("HttpService")
-    local TeleportService = game:GetService("TeleportService")
-    local placeId = game.PlaceId
-
-    -- Получаем список серверов
-    local function getServers()
-        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
-        local success, response = pcall(function()
-            return HttpService:GetAsync(url)
+    local function httpGet(url)
+        -- Пытаемся использовать http.request (Delta, Krnl)
+        local success, result = pcall(function()
+            return http.request({ Url = url, Method = "GET" })
         end)
-        if not success then
-            Notify("❌ Не удалось получить список серверов")
+        if success then
+            return result.Body
+        end
+
+        -- Если не сработало, пробуем syn.request (Synapse)
+        local success2, result2 = pcall(function()
+            return syn.request({ Url = url, Method = "GET" })
+        end)
+        if success2 then
+            return result2.Body
+        end
+
+        -- Если ничего не работает, возвращаем nil
+        return nil
+    end
+
+    -- Получаем список серверов через API Roblox
+    local function getServers()
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100"
+        local response = httpGet(url)
+        if not response then
+            Notify("❌ Не удалось выполнить запрос. Возможно, экзекутор не поддерживает http.request.")
             return nil
         end
-        local data = HttpService:JSONDecode(response)
+
+        local success, data = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(response)
+        end)
+        if not success then
+            Notify("❌ Ошибка парсинга ответа")
+            return nil
+        end
         return data.data
     end
 
-    -- Вычисляем возраст сервера в секундах (по полю created)
+    -- Вычисляем возраст сервера (по полю created)
     local function getServerAge(server)
-        -- created выглядит так: "2023-01-01T12:00:00.000Z"
         local created = server.created
         if not created then return 0 end
         local now = os.time()
-        -- Парсим дату (упрощённо)
         local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
         if not year then return 0 end
         local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
@@ -155,17 +172,13 @@ local createSuccess, createErr = pcall(function()
         local servers = getServers()
         if not servers then return end
 
-        local found = nil
-        local currentTime = workspace.DistributedGameTime
-        local currentMin = math.floor((currentTime % 3600) / 60)
-
-        -- Сначала проверяем текущий сервер
+        local currentMin = math.floor((workspace.DistributedGameTime % 3600) / 60)
         if currentMin >= targetMinStart and currentMin <= targetMinEnd then
             Notify("✅ Уже на сервере с :" .. string.format("%02d", currentMin))
             return
         end
 
-        -- Ищем подходящий сервер
+        local found = nil
         for _, server in pairs(servers) do
             local age = getServerAge(server)
             local minutes = math.floor((age % 3600) / 60)
@@ -176,14 +189,15 @@ local createSuccess, createErr = pcall(function()
         end
 
         if found then
-            Notify("⏳ Найден сервер :" .. string.format("%02d", math.floor((getServerAge(found) % 3600) / 60)) .. ". Телепорт...")
-            TeleportService:TeleportToPlaceInstance(placeId, found.id, Player)
+            local foundMin = math.floor((getServerAge(found) % 3600) / 60)
+            Notify("⏳ Найден сервер :" .. string.format("%02d", foundMin) .. ". Телепорт...")
+            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, found.id, Player)
         else
             Notify("❌ Сервер в диапазоне :" .. targetMinStart .. "-" .. targetMinEnd .. " не найден. Попробуй позже.")
         end
     end
 
-    -- ========== СТАРЫЕ ФУНКЦИИ (обновлены) ==========
+    -- ========== ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений) ==========
 
     local function ShowServerTime()
         local seconds = workspace.DistributedGameTime
@@ -193,16 +207,6 @@ local createSuccess, createErr = pcall(function()
         Notify(string.format("🕐 Сервер работает: %02d:%02d:%02d", h, m, s))
     end
 
-    local function RestartGame()
-        Notify("🔄 Перезапуск игры...")
-        pcall(function()
-            game:Shutdown()
-        end)
-        wait(2)
-        Notify("❌ Не удалось перезапустить автоматически. Перезайди вручную.")
-    end
-
-    -- ========== ФАРМ (без изменений) ==========
     local farming = false
     local farmCoroutine = nil
 
@@ -255,7 +259,6 @@ local createSuccess, createErr = pcall(function()
         Notify("⛔ Фарм остановлен")
     end
 
-    -- ========== ТЕЛЕПОРТЫ ==========
     local teleports = {
         ["Центр"] = Vector3.new(0, 10, 0),
         ["Остров джунглей"] = Vector3.new(1000, 10, 1000),
@@ -274,8 +277,7 @@ local createSuccess, createErr = pcall(function()
 
     -- ========== КНОПКИ ==========
     AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🔄 Перезапустить игру", RestartGame, Color3.fromRGB(255, 100, 100))
-    AddButton(TabContainer, "🚀 Сервер-хоп на :55-59 (API)", function() hopToServer(55, 59) end, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🚀 Сервер-хоп на :55-59", function() hopToServer(55, 59) end, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "🎯 Сервер-хоп на :59 (точно)", function() hopToServer(59, 59) end, Color3.fromRGB(0, 150, 200))
     AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
     AddButton(TabContainer, "⛔ Остановить фарм", StopFarm, Color3.fromRGB(80, 200, 80))
@@ -298,5 +300,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Blox Hub v3.0 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
+    print("✅ Blox Hub v3.2 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
 end
