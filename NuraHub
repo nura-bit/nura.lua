@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v2.1 (Delta Debug + Fallback)
+--  BLOX HUB v2.2 (Исправлен pcall)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -11,24 +11,27 @@ if not Player then
 end
 print("2. Player найден")
 
--- Пытаемся использовать CoreGui, но если не выйдет - используем PlayerGui
-local guiParent = pcall(function()
+-- Правильно получаем CoreGui через pcall
+local success, guiParent = pcall(function()
     return game:GetService("CoreGui")
 end)
 
-if not guiParent or not guiParent then
+if not success or not guiParent then
     print("CoreGui не доступен, используем PlayerGui")
     guiParent = Player:WaitForChild("PlayerGui")
+    if not guiParent then
+        print("Ошибка: PlayerGui не найден")
+        return
+    end
 else
     print("CoreGui доступен")
 end
 
-wait(1) -- даём время на инициализацию
+wait(1)
 
 print("3. Начинаем создание GUI")
 
-local success, err = pcall(function()
-
+local createSuccess, createErr = pcall(function()
     -- Круглая кнопка
     local toggleButton = Instance.new("ImageButton")
     toggleButton.Name = "ToggleButton"
@@ -73,7 +76,7 @@ local success, err = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "⭐ Blox Hub v2.1"
+    Title.Text = "⭐ Blox Hub v2.2"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -87,7 +90,6 @@ local success, err = pcall(function()
 
     print("5. Меню создано")
 
-    -- Функция добавления кнопок
     local function AddButton(parent, text, callback, color)
         local btn = Instance.new("TextButton")
         btn.Parent = parent
@@ -107,7 +109,7 @@ local success, err = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- Функции (те же, что были)
+    -- Функции
     local function ShowServerTime()
         local seconds = workspace.DistributedGameTime
         local h = math.floor(seconds / 3600)
@@ -161,7 +163,6 @@ local success, err = pcall(function()
                     if target and target.Humanoid.Health > 0 then
                         hrp.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
                         wait(0.2)
-                        -- Попытка удара (для Delta можно попробовать эмуляцию касания)
                         pcall(function()
                             local VirtualInput = game:GetService("VirtualInputManager")
                             if VirtualInput then
@@ -198,7 +199,6 @@ local success, err = pcall(function()
         end
     end
 
-    -- Добавляем кнопки
     AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
     AddButton(TabContainer, "🔍 Найти сервер :59", FindServerWith59, Color3.fromRGB(70, 130, 180))
     AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
@@ -209,7 +209,6 @@ local success, err = pcall(function()
 
     print("6. Кнопки добавлены")
 
-    -- Логика открытия/закрытия
     local menuVisible = false
     toggleButton.MouseButton1Click:Connect(function()
         menuVisible = not menuVisible
@@ -217,11 +216,10 @@ local success, err = pcall(function()
     end)
 
     print("7. Обработчик клика установлен")
+end)
 
-end) -- конец pcall
-
-if not success then
-    print("Ошибка при создании GUI:", err)
+if not createSuccess then
+    print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Blox Hub v2.1 успешно загружен! Нажми на ⭐ для открытия меню.")
+    print("✅ Blox Hub v2.2 успешно загружен! Нажми на ⭐ для открытия меню.")
 end
