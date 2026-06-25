@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v7.2 (Хоп по возрасту сервера через API)
+--  BLOX HUB v7.3 (Хоп через меню + API)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 500)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -250)
+    MainFrame.Size = UDim2.new(0, 420, 0, 580)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -290)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v7.2 (Хоп по возрасту)"
+    Title.Text = "🍎 Fruit Hub v7.3 (Меню + API)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -142,11 +142,10 @@ local createSuccess, createErr = pcall(function()
         return data.data
     end
 
-    -- Вычисляем возраст сервера в секундах (по полю created)
     local function getServerAge(server)
         local created = server.created
         if not created then return 0 end
-        local now = os.time(os.date("!*t")) -- UTC
+        local now = os.time(os.date("!*t"))
         local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
         if not year then return 0 end
         local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
@@ -154,10 +153,10 @@ local createSuccess, createErr = pcall(function()
         return os.difftime(now, serverTime)
     end
 
-    -- ========== ХОП ПО ЗАДАННОМУ ВОЗРАСТУ (В ЧАСАХ) ==========
+    -- ========== ХОП ЧЕРЕЗ МЕНЮ ==========
 
     local function hopToAge(targetHours)
-        Notify("🔍 Ищем сервер с возрастом около " .. targetHours .. " ч...")
+        Notify("🔍 Ищем сервер с возрастом ~" .. targetHours .. " ч...")
         local servers = getServers()
         if not servers then return end
 
@@ -175,19 +174,53 @@ local createSuccess, createErr = pcall(function()
             end
         end
 
-        if found then
-            local age = getServerAge(found)
-            local hours = math.floor(age / 3600)
-            local minutes = math.floor((age % 3600) / 60)
-            Notify("⏳ Найден сервер с возрастом " .. hours .. "ч " .. minutes .. "м. Телепорт...")
-            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, found.id, Player)
-        else
+        if not found then
             Notify("❌ Сервер с возрастом ~" .. targetHours .. "ч не найден")
+            return
+        end
+
+        local age = getServerAge(found)
+        local hours = math.floor(age / 3600)
+        local minutes = math.floor((age % 3600) / 60)
+        Notify("⏳ Найден сервер: " .. hours .. "ч " .. minutes .. "м. Открываем меню...")
+
+        -- Открываем меню выбора сервера
+        pcall(function()
+            game:GetService("GuiService"):OpenPlayerMenu()
+        end)
+
+        wait(1.5)
+
+        -- Ищем кнопку "Play" в CoreGui
+        local coreGui = game:GetService("CoreGui")
+        local playButton = nil
+
+        local function findPlayButton(parent)
+            for _, child in pairs(parent:GetDescendants()) do
+                if child:IsA("TextButton") and (child.Name == "Play" or string.find(child.Name, "Play")) then
+                    return child
+                end
+                if child:IsA("ImageButton") and (child.Name == "Play" or string.find(child.Name, "Play")) then
+                    return child
+                end
+            end
+            return nil
+        end
+
+        playButton = findPlayButton(coreGui)
+
+        if playButton then
+            Notify("✅ Нажатие на Play...")
+            pcall(function()
+                playButton:Click()
+            end)
+        else
+            Notify("❌ Кнопка Play не найдена. Перезапуск...")
+            game:Shutdown()
         end
     end
 
-    -- ========== КНОПКИ ДЛЯ РАЗНЫХ ВОЗРАСТОВ ==========
-
+    -- ========== КНОПКИ ==========
     AddButton(TabContainer, "🕐 4 часа (04:00:00)", function() hopToAge(4) end, Color3.fromRGB(70, 130, 180))
     AddButton(TabContainer, "🕐 5 часов (05:00:00)", function() hopToAge(5) end, Color3.fromRGB(70, 130, 180))
     AddButton(TabContainer, "🕐 6 часов (06:00:00)", function() hopToAge(6) end, Color3.fromRGB(70, 130, 180))
@@ -211,5 +244,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v7.2 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v7.3 загружен! Нажми на 🍎")
 end
