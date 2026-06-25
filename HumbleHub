@@ -1,11 +1,14 @@
 -- =============================================
---  BLOX HUB v9.0 (Меню + сервер-хоп через JobId)
+--  HUMBLEHUB v1.0 (сервер-хоп через GUI + фильтр игроков)
 -- =============================================
 
-print("🍎 Fruit Hub v9.0 загружен")
+print("🍎 HumbleHub v1.0 загружен")
 
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local placeId = game.PlaceId
 
 -- ========== HTTP-ЗАПРОСЫ ==========
 
@@ -19,11 +22,7 @@ local function httpGet(url)
     return nil
 end
 
--- ========== СЕРВЕР-ХОП ЧЕРЕЗ JOBID ==========
-
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local placeId = game.PlaceId
+-- ========== ПОЛУЧЕНИЕ СПИСКА СЕРВЕРОВ ==========
 
 local function getServers()
     local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
@@ -42,39 +41,140 @@ local function getServers()
     return data.data
 end
 
-local function hopToRandomServer()
-    print("🔄 Сервер-хоп...")
+-- ========== ПОИСК КНОПКИ "JOIN" ДЛЯ КОНКРЕТНОГО СЕРВЕРА ==========
+
+local function findJoinButtonForServer(serverId)
+    -- Ищем в PlayerGui элемент с текстом, содержащим serverId или имя сервера
+    -- В меню серверов обычно есть список, и у каждого сервера есть кнопка "Join"
+    local playerGui = player:WaitForChild("PlayerGui")
+    local joinButton = nil
+
+    local function searchForJoin(parent)
+        for _, child in pairs(parent:GetChildren()) do
+            -- Проверяем, является ли элемент кнопкой с текстом Join/Присоединиться
+            if child:IsA("TextButton") then
+                local hasText, text = pcall(function() return child.Text end)
+                if hasText and type(text) == "string" then
+                    if string.find(text, "Join") or string.find(text, "Играть") or string.find(text, "Присоединиться") then
+                        -- Проверяем, есть ли рядом текст с serverId (может быть в родителе или соседях)
+                        local parentContainer = child.Parent
+                        if parentContainer then
+                            for _, sibling in pairs(parentContainer:GetChildren()) do
+                                local hasSibText, sibText = pcall(function() return sibling.Text end)
+                                if hasSibText and type(sibText) == "string" then
+                                    if string.find(sibText, serverId) then
+                                        return child
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            -- Рекурсивный обход
+            local found = searchForJoin(child)
+            if found then return found end
+        end
+        return nil
+    end
+
+    joinButton = searchForJoin(playerGui)
+    return joinButton
+end
+
+-- ========== ОТКРЫТИЕ МЕНЮ СЕРВЕРОВ ==========
+
+local function openServerMenu()
+    local playerGui = player:WaitForChild("PlayerGui")
+    for _, child in pairs(playerGui:GetDescendants()) do
+        if child:IsA("TextButton") or child:IsA("ImageButton") then
+            local hasText, text = pcall(function() return child.Text end)
+            if hasText and type(text) == "string" then
+                if string.find(text, "Server") or string.find(text, "Сервер") or string.find(text, "Сервера") then
+                    child:Click()
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- ========== ОСНОВНАЯ ФУНКЦИЯ ХОПА ==========
+
+local function hopToLeastPopulatedServer()
+    print("🔄 Хоп на сервер с наименьшим количеством игроков...")
+
+    -- 1. Получаем список серверов
     local servers = getServers()
     if not servers or #servers == 0 then
         print("❌ Не удалось получить список серверов")
         return
     end
 
-    local currentJobId = game.JobId
+    -- 2. Сортируем по количеству игроков (по возрастанию)
+    table.sort(servers, function(a, b)
+        return (a.playing or 0) < (b.playing or 0)
+    end)
+
+    -- 3. Ищем сервер с игроками меньше максимума (не полный)
     local targetServer = nil
+    local currentJobId = game.JobId
     for _, server in pairs(servers) do
-        if server.id ~= currentJobId then
+        if server.id ~= currentJobId and (server.playing or 0) < (server.maxPlayers or 12) then
             targetServer = server
             break
         end
     end
 
-    if targetServer then
-        print("✅ Телепорт на сервер:", targetServer.id)
-        TeleportService:TeleportToPlaceInstance(placeId, targetServer.id, player)
-    else
-        print("❌ Не найдено других серверов")
+    if not targetServer then
+        print("❌ Не найдено подходящих серверов")
+        return
     end
+
+    local serverId = targetServer.id
+    local playerCount = targetServer.playing or 0
+    print("✅ Выбран сервер с " .. playerCount .. " игроками")
+
+    -- 4. Открываем меню серверов
+    if not openServerMenu() then
+        print("❌ Не удалось открыть меню серверов")
+        return
+    end
+
+    wait(1.5) -- ждём загрузки списка
+
+    -- 5. Ищем кнопку Join для этого сервера
+    local joinButton = findJoinButtonForServer(serverId)
+    if not joinButton then
+        print("❌ Не найдена кнопка Join для сервера " .. serverId)
+        return
+    end
+
+    -- 6. Кликаем по Join
+    print("✅ Нажатие на Join...")
+    joinButton:Click()
+    wait(0.5)
+
+    -- Дополнительный клик через координаты (на всякий случай)
+    pcall(function()
+        local pos = joinButton.AbsolutePosition
+        local size = joinButton.AbsoluteSize
+        if pos and size then
+            mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
+        end
+    end)
+
+    print("✅ Хоп выполнен!")
 end
 
--- ========== GUI (красивое меню) ==========
+-- ========== GUI ==========
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FruitHub"
+screenGui.Name = "HumbleHub"
 screenGui.Parent = playerGui
 screenGui.ResetOnSpawn = false
 
--- Главное окно
 local mainFrame = Instance.new("Frame")
 mainFrame.Parent = screenGui
 mainFrame.Size = UDim2.new(0, 320, 0, 420)
@@ -88,17 +188,15 @@ local cornerMain = Instance.new("UICorner")
 cornerMain.Parent = mainFrame
 cornerMain.CornerRadius = UDim.new(0, 16)
 
--- Заголовок
 local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 45)
-title.Text = "🍎 Fruit Hub v9.0"
+title.Text = "🍎 HumbleHub v1.0"
 title.TextColor3 = Color3.fromRGB(255, 215, 0)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 24
 
--- Контейнер для кнопок
 local container = Instance.new("Frame")
 container.Parent = mainFrame
 container.Size = UDim2.new(1, -20, 1, -65)
@@ -126,17 +224,15 @@ local function AddButton(text, callback, color)
     btn.MouseButton1Click:Connect(callback)
 end
 
--- Кнопки
-AddButton("🔄 Сервер-хоп (быстрый)", function()
-    hopToRandomServer()
+AddButton("🔄 Сервер-хоп (наименее заполненный)", function()
+    hopToLeastPopulatedServer()
 end, Color3.fromRGB(0, 180, 100))
 
 AddButton("🔄 Перезапустить игру", function()
     game:Shutdown()
 end, Color3.fromRGB(200, 60, 60))
 
--- ========== КНОПКА-ЛОГОТИП (открытие/закрытие) ==========
-
+-- Кнопка-логотип
 local toggleButton = Instance.new("ImageButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Parent = screenGui
@@ -166,4 +262,4 @@ toggleButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = menuVisible
 end)
 
-print("✅ Fruit Hub v9.0 готов! Нажми на 🍎 для открытия меню.")
+print("✅ HumbleHub v1.0 загружен! Нажми на 🍎 для открытия меню.")
