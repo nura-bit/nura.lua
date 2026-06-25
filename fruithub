@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v5.8 (Сканер времени сервера)
+--  BLOX HUB v5.9 (Сканер чисел в игре)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 320)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
+    MainFrame.Size = UDim2.new(0, 420, 0, 280)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -140)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v5.8"
+    Title.Text = "🍎 Fruit Hub v5.9"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -112,62 +112,50 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== СКАНЕР ВРЕМЕНИ СЕРВЕРА ==========
+    -- ========== СКАНЕР БОЛЬШИХ ЧИСЕЛ ==========
 
-    local function scanForServerTime()
-        Notify("🔍 Начинаем сканирование... Смотри консоль!")
-        print("=== СКАНИРОВАНИЕ ВРЕМЕНИ СЕРВЕРА ===")
-        local foundNumbers = {}
+    local function scanForBigNumbers()
+        Notify("🔍 Сканирую числа > 1000... Смотри консоль!")
+        print("=== НАЧАЛО СКАНИРОВАНИЯ ===")
 
         local function scanObject(obj, path)
-            -- Проверяем свойства
+            -- Проверяем свойства объекта (числовые)
             local success, props = pcall(function() return obj:GetProperties() end)
             if success then
                 for _, prop in pairs(props) do
                     local val = obj[prop]
                     if type(val) == "number" and val > 1000 then
-                        print("Число:", val, "путь:", path .. "." .. prop)
-                        table.insert(foundNumbers, {path = path .. "." .. prop, value = val})
+                        print("ЧИСЛО:", val, " | ПУТЬ:", path .. "." .. prop)
                     end
                 end
             end
-            -- Проверяем детей
+            -- Рекурсивно обходим детей
             for _, child in pairs(obj:GetChildren()) do
                 scanObject(child, path .. "." .. child.Name)
             end
         end
 
-        -- Сканируем основные контейнеры
+        -- Сканируем только существующие контейнеры
         local containers = {
             game:GetService("ReplicatedStorage"),
-            game:GetService("Workspace"),
+            workspace,
             Player,
-            game:GetService("GameService"),
             game:GetService("Players")
         }
-        for _, container in pairs(containers) do
-            pcall(function() scanObject(container, container.Name) end)
-        end
 
-        -- Сканируем RemoteEvent (через подключение)
-        for _, obj in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-            if obj:IsA("RemoteEvent") then
-                obj.OnClientEvent:Connect(function(...)
-                    local args = {...}
-                    for _, arg in ipairs(args) do
-                        if type(arg) == "number" and arg > 1000 then
-                            print("RemoteEvent число:", arg, "из события", obj.Name)
-                        end
-                    end
+        for _, container in pairs(containers) do
+            if container then
+                pcall(function()
+                    scanObject(container, container.Name)
                 end)
             end
         end
 
         print("=== СКАНИРОВАНИЕ ЗАВЕРШЕНО ===")
-        Notify("✅ Сканирование завершено! Проверь консоль.")
+        Notify("✅ Готово! Смотри консоль Delta.")
     end
 
-    -- ========== ХОП И ПЕРЕЗАПУСК ==========
+    -- ========== ХОП ==========
 
     local function hopServer()
         Notify("🔄 Переключение сервера...")
@@ -191,7 +179,7 @@ local createSuccess, createErr = pcall(function()
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🔍 Сканировать время сервера", scanForServerTime, Color3.fromRGB(255, 200, 50))
+    AddButton(TabContainer, "🔍 Сканировать числа > 1000", scanForBigNumbers, Color3.fromRGB(255, 200, 50))
     AddButton(TabContainer, "🔄 Переключить сервер", hopServer, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 50, 50))
 
@@ -210,5 +198,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v5.8 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v5.9 загружен! Нажми на 🍎")
 end
