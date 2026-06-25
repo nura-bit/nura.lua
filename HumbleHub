@@ -1,57 +1,111 @@
 -- =============================================
---  HUMBLEHUB v1.4 (Без перезапуска)
+--  HUMBLEHUB v2.0 (Умный хоп по аптайму)
 -- =============================================
 
-print("🍎 HumbleHub v1.4 загружен")
+print("🍎 HumbleHub v2.0 загружен")
 
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local Workspace = game:GetService("Workspace")
 
--- ========== ГЛАВНАЯ ФУНКЦИЯ ХОПА ==========
+local TOLERANCE = 30 -- допуск в секундах (подходит, если остаток до часа меньше 30 или больше 3570)
 
-local function hop()
-    print("🔄 Хоп...")
+-- ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
-    -- Ищем кнопку "ServerHop"
-    local serverHopButton = nil
+-- Эмуляция клика по кнопке (с запасным вариантом)
+local function clickButton(button)
+    if not button then return false end
+    pcall(function() button:Click() end)
+    pcall(function()
+        local pos = button.AbsolutePosition
+        local size = button.AbsoluteSize
+        if pos and size then
+            mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
+        end
+    end)
+    return true
+end
+
+-- Поиск кнопки по тексту (регистронезависимо)
+local function findButtonByText(keywords)
     for _, child in pairs(playerGui:GetDescendants()) do
-        if child:IsA("TextButton") and child.Name == "ServerHop" then
-            serverHopButton = child
-            break
+        if child:IsA("TextButton") or child:IsA("ImageButton") then
+            local success, text = pcall(function() return child.Text end)
+            if success and type(text) == "string" then
+                local lower = string.lower(text)
+                for _, kw in ipairs(keywords) do
+                    if string.find(lower, string.lower(kw)) then
+                        return child
+                    end
+                end
+            end
         end
     end
+    return nil
+end
 
-    if serverHopButton then
-        print("✅ Найдена кнопка ServerHop, клик...")
-        serverHopButton:Click()
-        wait(0.5)
-        -- Дополнительный клик через координаты для надёжности
-        pcall(function()
-            local pos = serverHopButton.AbsolutePosition
-            local size = serverHopButton.AbsoluteSize
-            if pos and size then
-                mouse1click(pos.X + size.X/2, pos.Y + size.Y/2)
-            end
-        end)
-        print("✅ Клик выполнен.")
+-- ========== ГЛАВНАЯ ФУНКЦИЯ ХОПА (GUI) ==========
+
+local function hopViaGUI()
+    print("🔄 Хоп через GUI...")
+
+    -- 1. Открыть меню серверов
+    local serverButton = findButtonByText({"server", "сервер", "servers"})
+    if not serverButton then
+        print("❌ Кнопка 'Сервера' не найдена")
+        return false
+    end
+
+    clickButton(serverButton)
+    print("✅ Меню открыто, ждём загрузки...")
+    wait(1.5)
+
+    -- 2. Найти и нажать кнопку "Join"
+    local joinButton = findButtonByText({"join", "играть", "присоединиться"})
+    if not joinButton then
+        print("❌ Кнопка 'Join' не найдена")
+        return false
+    end
+
+    clickButton(joinButton)
+    print("✅ Клик по Join выполнен")
+    return true
+end
+
+-- ========== ПРОВЕРКА АПТАЙМА И УМНЫЙ ХОП ==========
+
+local function smartHop()
+    local uptime = Workspace.DistributedGameTime
+    local remainder = uptime % 3600
+    local isGood = (remainder <= TOLERANCE) or (remainder >= (3600 - TOLERANCE))
+
+    print(string.format("🕐 Аптайм сервера: %d сек (%.1f мин), остаток до часа: %d сек", uptime, uptime/60, remainder))
+
+    if isGood then
+        print("✅ Аптайм подходит! Остаёмся на сервере.")
+        return
+    end
+
+    print("⏳ Аптайм не подходит, делаем хоп...")
+    local success = hopViaGUI()
+    if success then
+        print("✅ Хоп выполнен успешно!")
     else
-        print("❌ Кнопка ServerHop не найдена. Сообщите разработчику.")
-        -- Никакого перезапуска!
+        print("❌ Хоп не удался. Попробуй вручную.")
     end
 end
 
--- ========== GUI (МЕНЮ) ==========
+-- ========== GUI МЕНЮ ==========
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "HumbleHub"
 screenGui.Parent = playerGui
 screenGui.ResetOnSpawn = false
 
--- Главное окно
 local mainFrame = Instance.new("Frame")
 mainFrame.Parent = screenGui
-mainFrame.Size = UDim2.new(0, 280, 0, 180)
-mainFrame.Position = UDim2.new(0.5, -140, 0.5, -90)
+mainFrame.Size = UDim2.new(0, 280, 0, 220)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -110)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.Active = true
@@ -64,7 +118,7 @@ cornerMain.CornerRadius = UDim.new(0, 16)
 local title = Instance.new("TextLabel")
 title.Parent = mainFrame
 title.Size = UDim2.new(1, 0, 0, 40)
-title.Text = "🍎 HumbleHub"
+title.Text = "🍎 HumbleHub v2.0"
 title.TextColor3 = Color3.fromRGB(255, 215, 0)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.SourceSansBold
@@ -97,7 +151,8 @@ local function AddButton(text, callback, color)
     btn.MouseButton1Click:Connect(callback)
 end
 
-AddButton("🔄 Сервер-хоп", hop, Color3.fromRGB(0, 180, 100))
+AddButton("🧠 Умный хоп (по аптайму)", smartHop, Color3.fromRGB(0, 180, 100))
+AddButton("🔄 Обычный хоп (GUI)", hopViaGUI, Color3.fromRGB(200, 150, 50))
 AddButton("🔄 Перезапустить игру", function() game:Shutdown() end, Color3.fromRGB(200, 60, 60))
 
 -- Кнопка-логотип
@@ -130,4 +185,4 @@ toggleButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = menuVisible
 end)
 
-print("✅ HumbleHub v1.4 загружен! Нажми на 🍎")
+print("✅ HumbleHub v2.0 готов! Нажми 🍎 для меню.")
