@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v7.7 (Исправлен поиск кнопок + отладка)
+--  BLOX HUB v7.8 (Клик по конкретному серверу)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v7.7"
+    Title.Text = "🍎 Fruit Hub v7.8 (Точный хоп)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -150,65 +150,71 @@ local createSuccess, createErr = pcall(function()
         if not year then return 0 end
         local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
         local serverTime = os.time(timeTable)
-        local age = os.difftime(now, serverTime)
-        -- Для отладки выведем возраст
-        print("Возраст сервера (сек):", age, "| created:", created)
-        return age
+        return os.difftime(now, serverTime)
     end
 
-    -- ========== ПОИСК КНОПКИ ==========
+    -- ========== ПОИСК КНОПКИ КОНКРЕТНОГО СЕРВЕРА ==========
 
-    local function findServerButton(serverName)
+    local function findServerJoinButton(serverName)
         local playerGui = Player:WaitForChild("PlayerGui")
-        local foundButtons = {}
+        -- Ищем контейнеры серверов. Обычно это Template или строки в ServerBrowser
+        local serverContainers = {}
 
-        local function searchForText(parent, searchText)
+        -- Функция для поиска всех контейнеров, содержащих текст с именем сервера
+        local function findContainers(parent)
             for _, child in pairs(parent:GetChildren()) do
                 -- Проверяем, есть ли у child свойство Text и является ли оно строкой
                 local hasText, text = pcall(function() return child.Text end)
                 if hasText and type(text) == "string" and text ~= "" then
-                    if string.find(text, searchText) or string.find(text, "Join") or string.find(text, "Играть") then
-                        -- Ищем родительскую кнопку
-                        local button = child
-                        while button and not (button:IsA("TextButton") or button:IsA("ImageButton")) do
-                            button = button.Parent
+                    -- Если текст содержит имя сервера (или часть)
+                    if string.find(text, serverName) then
+                        -- Поднимаемся к контейнеру сервера (обычно это Template или Frame)
+                        local container = child
+                        while container and not (container.Name == "Template" or container.Name == "Inside" or container.Name == "ServerRow") do
+                            container = container.Parent
                         end
-                        if button then
-                            local path = ""
-                            local p = button
-                            while p and p ~= playerGui do
-                                path = p.Name .. (path ~= "" and "." .. path or "")
-                                p = p.Parent
-                            end
-                            table.insert(foundButtons, {Button = button, Text = text, Path = path})
+                        if container then
+                            table.insert(serverContainers, container)
                         end
                     end
                 end
                 -- Рекурсивно обходим детей
-                searchForText(child, searchText)
+                findContainers(child)
             end
         end
 
-        -- Поиск по имени сервера (может быть частичное совпадение)
-        searchForText(playerGui, serverName)
+        -- Начинаем поиск с PlayerGui
+        findContainers(playerGui)
 
-        -- Если не нашли, ищем по "Join" или "Играть"
-        if #foundButtons == 0 then
-            searchForText(playerGui, "Join")
-        end
-        if #foundButtons == 0 then
-            searchForText(playerGui, "Играть")
-        end
-
-        -- Выводим все найденные кнопки
-        print("=== НАЙДЕННЫЕ КНОПКИ (" .. #foundButtons .. ") ===")
-        for i, info in ipairs(foundButtons) do
-            print(i .. ": Текст: " .. info.Text .. " | Путь: " .. info.Path)
+        -- Если нашли контейнеры, ищем внутри них кнопку Join
+        for _, container in pairs(serverContainers) do
+            for _, child in pairs(container:GetDescendants()) do
+                if child:IsA("TextButton") or child:IsA("ImageButton") then
+                    local hasText, text = pcall(function() return child.Text end)
+                    if hasText and type(text) == "string" and (string.find(text, "Join") or string.find(text, "Играть")) then
+                        return child
+                    end
+                end
+            end
         end
 
-        if #foundButtons > 0 then
-            return foundButtons[1].Button
+        -- Если не нашли через контейнер, ищем любую кнопку Join (запасной вариант)
+        for _, child in pairs(playerGui:GetDescendants()) do
+            if child:IsA("TextButton") or child:IsA("ImageButton") then
+                local hasText, text = pcall(function() return child.Text end)
+                if hasText and type(text) == "string" and (string.find(text, "Join") or string.find(text, "Играть")) then
+                    -- Проверим, есть ли рядом текст с именем сервера
+                    local parent = child.Parent
+                    for _, sibling in pairs(parent:GetChildren()) do
+                        local hasSiblingText, siblingText = pcall(function() return sibling.Text end)
+                        if hasSiblingText and type(siblingText) == "string" and string.find(siblingText, serverName) then
+                            return child
+                        end
+                    end
+                end
+            end
         end
+
         return nil
     end
 
@@ -216,9 +222,7 @@ local createSuccess, createErr = pcall(function()
 
     local function clickButton(button)
         if not button then return false end
-        -- Стандартный Click
         pcall(function() button:Click() end)
-        -- mouse1click с координатами
         pcall(function()
             local pos = button.AbsolutePosition
             local size = button.AbsoluteSize
@@ -228,7 +232,6 @@ local createSuccess, createErr = pcall(function()
                 mouse1click(x, y)
             end
         end)
-        -- VirtualInputManager
         pcall(function()
             local vim = game:GetService("VirtualInputManager")
             if vim then
@@ -255,7 +258,6 @@ local createSuccess, createErr = pcall(function()
         for _, server in pairs(servers) do
             local age = getServerAge(server)
             local diff = math.abs(age - targetAge)
-            print("Сервер:", server.name or server.id, "возраст:", age, "сек, разница:", diff)
             if diff < bestDiff then
                 bestDiff = diff
                 found = server
@@ -273,21 +275,23 @@ local createSuccess, createErr = pcall(function()
         local minutes = math.floor((age % 3600) / 60)
         Notify("⏳ Найден сервер: " .. hours .. "ч " .. minutes .. "м. Ищем в меню...")
 
-        -- Открываем меню (если не открыто)
+        -- Открываем меню (если необходимо)
         pcall(function()
-            -- Если есть специальная кнопка открытия меню, можно добавить
+            -- Если есть кнопка открытия меню, можно добавить
         end)
 
         wait(1.5)
 
-        local serverButton = findServerButton(foundName)
+        local serverButton = findServerJoinButton(foundName)
         if serverButton then
-            Notify("✅ Найдена кнопка! Клик...")
+            Notify("✅ Найдена кнопка Join для этого сервера! Клик...")
             clickButton(serverButton)
             wait(1)
             Notify("✅ Клик выполнен.")
         else
             Notify("❌ Кнопка не найдена. Проверь консоль для отладки.")
+            -- Выведем имя сервера для отладки
+            print("Имя сервера для поиска:", foundName)
         end
     end
 
@@ -315,5 +319,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v7.7 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v7.8 загружен! Нажми на 🍎")
 end
