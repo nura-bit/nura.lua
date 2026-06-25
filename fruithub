@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v5.2 (Авто-фрукт + автопереключение)
+--  BLOX HUB v5.4 (Авто-переключение через меню)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -67,8 +67,8 @@ local createSuccess, createErr = pcall(function()
     -- Главное меню
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 380, 0, 220)
-    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -110)
+    MainFrame.Size = UDim2.new(0, 380, 0, 280)
+    MainFrame.Position = UDim2.new(0.5, -190, 0.5, -140)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -82,7 +82,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Text = "🍎 Fruit Hub v5.2"
+    Title.Text = "🍎 Fruit Hub v5.4"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -114,113 +114,57 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== ФУНКЦИИ ==========
+    -- ========== АВТО-ПЕРЕКЛЮЧЕНИЕ ЧЕРЕЗ МЕНЮ ==========
 
-    -- Список фруктов
-    local fruitNames = {"Fruit", "Apple", "Banana", "Gravity", "Flame", "Light", "Dark", "Water", "Ice", "Quake", "Dragon", "Soul", "Venom", "Dough", "Shadow", "Leopard", "Blizzard", "Kilo", "Spin", "Rubber", "Falcon", "Smoke", "Ghost", "Sand", "Magma", "Buddha", "Portal", "Rumble", "String", "Diamond", "Flower", "Control", "Pain", "Love", "Spider", "Paw"}
-
-    local function findFruits()
-        local fruits = {}
-        for _, v in pairs(workspace:GetDescendants()) do
-            if v:IsA("Part") or v:IsA("Model") then
-                local name = v.Name
-                for _, fname in pairs(fruitNames) do
-                    if string.find(name, fname) or string.find(string.lower(name), string.lower(fname)) then
-                        if v:FindFirstChild("Handle") or v:FindFirstChild("Mesh") or v:FindFirstChild("BasePart") then
-                            table.insert(fruits, v)
-                            break
-                        end
-                    end
-                end
-            end
-        end
-        return fruits
-    end
-
-    -- Телепорт к фрукту
-    local function teleportToFruit(fruit)
-        local char = Player.Character
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        local pos = fruit:FindFirstChild("Handle") and fruit.Handle.Position or fruit.Position
-        if pos then
-            hrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
-        end
-    end
-
-    -- Сервер-хоп (без проверки времени)
-    local function hopToRandomServer()
-        Notify("🔄 Переключение сервера...")
-        game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-        -- Если не сработает, перезапуск
-        wait(2)
-        game:Shutdown()
-    end
-
-    -- ========== ГЛАВНЫЙ ЦИКЛ АВТО-ФРУКТА ==========
-
-    local autoFruitRunning = false
-    local autoFruitThread = nil
-
-    local function startAutoFruit()
-        if autoFruitRunning then
-            Notify("⏳ Уже запущен")
-            return
-        end
-        autoFruitRunning = true
-        Notify("🔁 Авто-фрукт запущен")
-
-        autoFruitThread = coroutine.create(function()
-            while autoFruitRunning do
-                Notify("🔍 Ищем фрукты на сервере...")
-                local fruits = findFruits()
-                if #fruits > 0 then
-                    local nearest = nil
-                    local distMin = math.huge
-                    local char = Player.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        for _, fruit in pairs(fruits) do
-                            local pos = fruit:FindFirstChild("Handle") and fruit.Handle.Position or fruit.Position
-                            if pos then
-                                local dist = (pos - hrp.Position).Magnitude
-                                if dist < distMin then
-                                    distMin = dist
-                                    nearest = fruit
-                                end
-                            end
-                        end
-                    end
-                    if nearest then
-                        Notify("🍎 Фрукт найден! Телепорт...")
-                        teleportToFruit(nearest)
-                        wait(2) -- ждём, чтобы автоподбор сработал
-                    end
-                else
-                    Notify("❌ Фруктов нет. Хоп...")
-                end
-                -- Переключение на новый сервер
-                hopToRandomServer()
-                wait(5) -- пауза перед следующим циклом (на случай, если телепорт не сработает)
-            end
-            Notify("⛔ Авто-фрукт остановлен")
+    local function switchServerViaMenu()
+        Notify("🔄 Открываем меню выбора сервера...")
+        -- Открываем меню (это стандартный метод Roblox)
+        pcall(function()
+            game:GetService("GuiService"):OpenPlayerMenu()
         end)
-        coroutine.resume(autoFruitThread)
-    end
 
-    local function stopAutoFruit()
-        if autoFruitRunning then
-            autoFruitRunning = false
-            Notify("⛔ Остановка...")
+        -- Ждём появления кнопки "Play" или списка серверов
+        wait(1)
+
+        -- Ищем кнопку в CoreGui (интерфейс Roblox)
+        local coreGui = game:GetService("CoreGui")
+        local playButton = nil
+
+        -- Поиск по всем объектам в CoreGui (с учётом вложенности)
+        local function findPlayButton(parent)
+            if not parent then return nil end
+            for _, child in pairs(parent:GetDescendants()) do
+                if child:IsA("TextButton") and child.Name == "Play" then
+                    return child
+                end
+                if child:IsA("ImageButton") and child.Name == "Play" then
+                    return child
+                end
+                -- Иногда кнопка называется "PlayButton" или "Join"
+                if child:IsA("TextButton") and string.find(child.Name, "Play") then
+                    return child
+                end
+            end
+            return nil
+        end
+
+        playButton = findPlayButton(coreGui)
+
+        if playButton then
+            Notify("✅ Кнопка 'Play' найдена, нажимаем...")
+            pcall(function()
+                playButton:Click()
+            end)
+            wait(1)
+            -- После клика игра переключает сервер, скрипт продолжит работу на новом сервере
         else
-            Notify("ℹ️ Авто-фрукт не запущен")
+            Notify("❌ Кнопка 'Play' не найдена, пробуем перезапуск...")
+            game:Shutdown()
         end
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🔁 Авто-фрукт (бесконечно)", startAutoFruit, Color3.fromRGB(0, 200, 100))
-    AddButton(TabContainer, "⏹️ Остановить", stopAutoFruit, Color3.fromRGB(200, 50, 50))
+    AddButton(TabContainer, "🔄 Переключить сервер (через меню)", switchServerViaMenu, Color3.fromRGB(0, 200, 100))
 
     print("6. Кнопки добавлены")
 
@@ -237,5 +181,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Fruit Hub v5.2 загружен! Нажми на 🍎")
+    print("✅ Fruit Hub v5.4 загружен! Нажми на 🍎")
 end
