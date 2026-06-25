@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v3.2 (Сервер-хоп через http.request)
+--  BLOX HUB v3.3 (Диапазон хопа 50-59)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -80,7 +80,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 45)
-    Title.Text = "⭐ Blox Hub v3.2"
+    Title.Text = "⭐ Blox Hub v3.3"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -112,38 +112,30 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== НОВАЯ ФУНКЦИЯ HTTP-ЗАПРОСА (через экзекутор) ==========
+    -- ========== ФУНКЦИЯ HTTP-ЗАПРОСА (через экзекутор) ==========
 
     local function httpGet(url)
-        -- Пытаемся использовать http.request (Delta, Krnl)
         local success, result = pcall(function()
             return http.request({ Url = url, Method = "GET" })
         end)
-        if success then
-            return result.Body
-        end
+        if success then return result.Body end
 
-        -- Если не сработало, пробуем syn.request (Synapse)
         local success2, result2 = pcall(function()
             return syn.request({ Url = url, Method = "GET" })
         end)
-        if success2 then
-            return result2.Body
-        end
+        if success2 then return result2.Body end
 
-        -- Если ничего не работает, возвращаем nil
         return nil
     end
 
-    -- Получаем список серверов через API Roblox
+    -- Получаем список серверов
     local function getServers()
         local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100"
         local response = httpGet(url)
         if not response then
-            Notify("❌ Не удалось выполнить запрос. Возможно, экзекутор не поддерживает http.request.")
+            Notify("❌ Не удалось выполнить запрос.")
             return nil
         end
-
         local success, data = pcall(function()
             return game:GetService("HttpService"):JSONDecode(response)
         end)
@@ -154,7 +146,7 @@ local createSuccess, createErr = pcall(function()
         return data.data
     end
 
-    -- Вычисляем возраст сервера (по полю created)
+    -- Вычисляем возраст сервера
     local function getServerAge(server)
         local created = server.created
         if not created then return 0 end
@@ -166,14 +158,14 @@ local createSuccess, createErr = pcall(function()
         return os.difftime(now, serverTime)
     end
 
-    -- Основная функция хопа
-    local function hopToServer(targetMinStart, targetMinEnd)
-        Notify("🔍 Поиск серверов с :" .. targetMinStart .. "-" .. targetMinEnd .. "...")
+    -- Основная функция хопа (диапазон 50-59)
+    local function hopToServer()
+        Notify("🔍 Поиск серверов с :50-59...")
         local servers = getServers()
         if not servers then return end
 
         local currentMin = math.floor((workspace.DistributedGameTime % 3600) / 60)
-        if currentMin >= targetMinStart and currentMin <= targetMinEnd then
+        if currentMin >= 50 and currentMin <= 59 then
             Notify("✅ Уже на сервере с :" .. string.format("%02d", currentMin))
             return
         end
@@ -182,7 +174,7 @@ local createSuccess, createErr = pcall(function()
         for _, server in pairs(servers) do
             local age = getServerAge(server)
             local minutes = math.floor((age % 3600) / 60)
-            if minutes >= targetMinStart and minutes <= targetMinEnd then
+            if minutes >= 50 and minutes <= 59 then
                 found = server
                 break
             end
@@ -193,11 +185,11 @@ local createSuccess, createErr = pcall(function()
             Notify("⏳ Найден сервер :" .. string.format("%02d", foundMin) .. ". Телепорт...")
             game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, found.id, Player)
         else
-            Notify("❌ Сервер в диапазоне :" .. targetMinStart .. "-" .. targetMinEnd .. " не найден. Попробуй позже.")
+            Notify("❌ Сервер в диапазоне 50-59 не найден. Попробуй позже.")
         end
     end
 
-    -- ========== ОСТАЛЬНЫЕ ФУНКЦИИ (без изменений) ==========
+    -- ========== ОСТАЛЬНЫЕ ФУНКЦИИ ==========
 
     local function ShowServerTime()
         local seconds = workspace.DistributedGameTime
@@ -277,8 +269,7 @@ local createSuccess, createErr = pcall(function()
 
     -- ========== КНОПКИ ==========
     AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🚀 Сервер-хоп на :55-59", function() hopToServer(55, 59) end, Color3.fromRGB(0, 200, 100))
-    AddButton(TabContainer, "🎯 Сервер-хоп на :59 (точно)", function() hopToServer(59, 59) end, Color3.fromRGB(0, 150, 200))
+    AddButton(TabContainer, "🚀 Сервер-хоп (50-59)", hopToServer, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
     AddButton(TabContainer, "⛔ Остановить фарм", StopFarm, Color3.fromRGB(80, 200, 80))
     for name, pos in pairs(teleports) do
@@ -300,5 +291,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Blox Hub v3.2 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
+    print("✅ Blox Hub v3.3 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
 end
