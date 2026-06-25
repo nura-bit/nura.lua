@@ -1,35 +1,42 @@
 -- =============================================
---  HUMBLEHUB v1.1 (GUI-клики без HTTP)
+--  HUMBLEHUB v1.2 (Простой хоп через GUI)
 -- =============================================
 
-print("🍎 HumbleHub v1.1 загружен")
+print("🍎 HumbleHub v1.2 загружен")
 
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ========== ОТКРЫТИЕ МЕНЮ СЕРВЕРОВ ==========
+-- ========== ФУНКЦИЯ ХОПА ==========
 
-local function openServerMenu()
-    local playerGui = player:WaitForChild("PlayerGui")
+local function hop()
+    print("🔄 Хоп...")
+    
+    -- 1. Ищем кнопку "Сервера" и кликаем
+    local serverButton = nil
     for _, child in pairs(playerGui:GetDescendants()) do
         if child:IsA("TextButton") or child:IsA("ImageButton") then
             local hasText, text = pcall(function() return child.Text end)
             if hasText and type(text) == "string" then
                 if string.find(text, "Server") or string.find(text, "Сервер") or string.find(text, "Сервера") then
-                    child:Click()
-                    return true
+                    serverButton = child
+                    break
                 end
             end
         end
     end
-    return false
-end
 
--- ========== ПОИСК КНОПКИ "JOIN" ==========
+    if not serverButton then
+        print("❌ Кнопка 'Сервера' не найдена, перезапуск...")
+        game:Shutdown()
+        return
+    end
 
-local function findJoinButton()
-    local playerGui = player:WaitForChild("PlayerGui")
-    -- Ищем все кнопки с текстом Join/Присоединиться/Играть
+    serverButton:Click()
+    print("✅ Меню открыто")
+    wait(1.5) -- ждём загрузки списка
+
+    -- 2. Ищем все кнопки "Join" и кликаем по случайной
     local joinButtons = {}
     for _, child in pairs(playerGui:GetDescendants()) do
         if child:IsA("TextButton") and child.Visible then
@@ -41,27 +48,13 @@ local function findJoinButton()
             end
         end
     end
-    return joinButtons
-end
 
--- ========== ОСНОВНАЯ ФУНКЦИЯ ХОПА ==========
-
-local function hopServer()
-    print("🔄 Открываю меню серверов...")
-    if not openServerMenu() then
-        print("❌ Не удалось открыть меню серверов")
-        return
-    end
-
-    wait(2) -- ждём загрузки списка
-
-    local joinButtons = findJoinButton()
     if #joinButtons == 0 then
-        print("❌ Кнопки Join не найдены")
+        print("❌ Кнопки 'Join' не найдены, перезапуск...")
+        game:Shutdown()
         return
     end
 
-    -- Выбираем случайную кнопку (или первую)
     local selected = joinButtons[math.random(1, #joinButtons)]
     print("✅ Нажатие на Join...")
     selected:Click()
@@ -88,8 +81,8 @@ screenGui.ResetOnSpawn = false
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Parent = screenGui
-mainFrame.Size = UDim2.new(0, 320, 0, 420)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+mainFrame.Size = UDim2.new(0, 280, 0, 180)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -90)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.Active = true
@@ -101,30 +94,30 @@ cornerMain.CornerRadius = UDim.new(0, 16)
 
 local title = Instance.new("TextLabel")
 title.Parent = mainFrame
-title.Size = UDim2.new(1, 0, 0, 45)
-title.Text = "🍎 HumbleHub v1.1"
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Text = "🍎 HumbleHub"
 title.TextColor3 = Color3.fromRGB(255, 215, 0)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.SourceSansBold
-title.TextSize = 24
+title.TextSize = 22
 
 local container = Instance.new("Frame")
 container.Parent = mainFrame
-container.Size = UDim2.new(1, -20, 1, -65)
-container.Position = UDim2.new(0, 10, 0, 55)
+container.Size = UDim2.new(1, -20, 1, -55)
+container.Position = UDim2.new(0, 10, 0, 45)
 container.BackgroundTransparency = 1
 
 local function AddButton(text, callback, color)
     local btn = Instance.new("TextButton")
     btn.Parent = container
-    btn.Size = UDim2.new(1, 0, 0, 45)
+    btn.Size = UDim2.new(1, 0, 0, 40)
     local count = #container:GetChildren()
-    btn.Position = UDim2.new(0, 0, 0, count * 50 + 5)
+    btn.Position = UDim2.new(0, 0, 0, count * 45 + 5)
     btn.Text = text
     btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.SourceSans
-    btn.TextSize = 18
+    btn.TextSize = 17
     btn.BorderSizePixel = 0
     btn.BackgroundTransparency = 0.2
 
@@ -135,13 +128,8 @@ local function AddButton(text, callback, color)
     btn.MouseButton1Click:Connect(callback)
 end
 
-AddButton("🔄 Сервер-хоп (GUI)", function()
-    hopServer()
-end, Color3.fromRGB(0, 180, 100))
-
-AddButton("🔄 Перезапустить игру", function()
-    game:Shutdown()
-end, Color3.fromRGB(200, 60, 60))
+AddButton("🔄 Сервер-хоп", hop, Color3.fromRGB(0, 180, 100))
+AddButton("🔄 Перезапустить", function() game:Shutdown() end, Color3.fromRGB(200, 60, 60))
 
 -- Кнопка-логотип
 local toggleButton = Instance.new("ImageButton")
@@ -173,4 +161,4 @@ toggleButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = menuVisible
 end)
 
-print("✅ HumbleHub v1.1 загружен! Нажми на 🍎 для открытия меню.")
+print("✅ HumbleHub v1.2 загружен! Нажми на 🍎")
