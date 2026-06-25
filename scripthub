@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v3.3 (Диапазон хопа 50-59)
+--  BLOX HUB v3.4 (Точный возраст сервера + отладка)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -65,8 +65,8 @@ local createSuccess, createErr = pcall(function()
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 450, 0, 520)
-    MainFrame.Position = UDim2.new(0.5, -225, 0.5, -260)
+    MainFrame.Size = UDim2.new(0, 480, 0, 580)
+    MainFrame.Position = UDim2.new(0.5, -240, 0.5, -290)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -80,11 +80,11 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 45)
-    Title.Text = "⭐ Blox Hub v3.3"
+    Title.Text = "⭐ Blox Hub v3.4 (возраст сервера)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
-    Title.TextSize = 26
+    Title.TextSize = 24
 
     local TabContainer = Instance.new("Frame")
     TabContainer.Parent = MainFrame
@@ -103,7 +103,7 @@ local createSuccess, createErr = pcall(function()
         btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         btn.Font = Enum.Font.SourceSans
-        btn.TextSize = 17
+        btn.TextSize = 16
         btn.BorderSizePixel = 0
         btn.BackgroundTransparency = 0.2
         local cornerBtn = Instance.new("UICorner")
@@ -112,7 +112,7 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== ФУНКЦИЯ HTTP-ЗАПРОСА (через экзекутор) ==========
+    -- ========== ФУНКЦИЯ HTTP-ЗАПРОСА ==========
 
     local function httpGet(url)
         local success, result = pcall(function()
@@ -126,6 +126,22 @@ local createSuccess, createErr = pcall(function()
         if success2 then return result2.Body end
 
         return nil
+    end
+
+    -- ========== ТОЧНЫЙ РАСЧЁТ ВОЗРАСТА СЕРВЕРА (UTC) ==========
+
+    local function getServerAge(server)
+        local created = server.created
+        if not created then return 0 end
+        -- Текущее время в UTC
+        local now = os.time(os.date("!*t"))
+        -- Парсим created (формат ISO 8601)
+        local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+        if not year then return 0 end
+        local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
+        local serverTime = os.time(timeTable)
+        -- Возвращаем возраст в секундах
+        return os.difftime(now, serverTime)
     end
 
     -- Получаем список серверов
@@ -146,43 +162,38 @@ local createSuccess, createErr = pcall(function()
         return data.data
     end
 
-    -- Вычисляем возраст сервера
-    local function getServerAge(server)
-        local created = server.created
-        if not created then return 0 end
-        local now = os.time()
-        local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
-        if not year then return 0 end
-        local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
-        local serverTime = os.time(timeTable)
-        return os.difftime(now, serverTime)
-    end
+    -- ========== ОСНОВНАЯ ФУНКЦИЯ ХОПА ==========
 
-    -- Основная функция хопа (диапазон 50-59)
     local function hopToServer()
-        Notify("🔍 Поиск серверов с :50-59...")
+        Notify("🔍 Поиск серверов с возрастом 50-59 минут...")
         local servers = getServers()
         if not servers then return end
 
-        local currentMin = math.floor((workspace.DistributedGameTime % 3600) / 60)
+        -- Проверяем текущий сервер
+        local currentAge = workspace.DistributedGameTime
+        local currentMin = math.floor((currentAge % 3600) / 60)
         if currentMin >= 50 and currentMin <= 59 then
-            Notify("✅ Уже на сервере с :" .. string.format("%02d", currentMin))
+            Notify("✅ Текущий сервер уже подходит (" .. currentMin .. " мин)")
             return
         end
 
+        -- Ищем подходящий сервер
         local found = nil
+        local foundMin = 0
+        print("--- Список серверов (возраст в минутах) ---")
         for _, server in pairs(servers) do
             local age = getServerAge(server)
             local minutes = math.floor((age % 3600) / 60)
+            print("Сервер:", server.id, "возраст (сек):", age, "минуты:", minutes)
             if minutes >= 50 and minutes <= 59 then
                 found = server
+                foundMin = minutes
                 break
             end
         end
 
         if found then
-            local foundMin = math.floor((getServerAge(found) % 3600) / 60)
-            Notify("⏳ Найден сервер :" .. string.format("%02d", foundMin) .. ". Телепорт...")
+            Notify("⏳ Найден сервер (" .. foundMin .. " мин). Телепорт...")
             game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, found.id, Player)
         else
             Notify("❌ Сервер в диапазоне 50-59 не найден. Попробуй позже.")
@@ -196,9 +207,10 @@ local createSuccess, createErr = pcall(function()
         local h = math.floor(seconds / 3600)
         local m = math.floor((seconds % 3600) / 60)
         local s = math.floor(seconds % 60)
-        Notify(string.format("🕐 Сервер работает: %02d:%02d:%02d", h, m, s))
+        Notify(string.format("🕐 Возраст сервера: %02d:%02d:%02d", h, m, s))
     end
 
+    -- Фарм, телепорты и т.д. (без изменений)
     local farming = false
     local farmCoroutine = nil
 
@@ -268,8 +280,8 @@ local createSuccess, createErr = pcall(function()
     end
 
     -- ========== КНОПКИ ==========
-    AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🚀 Сервер-хоп (50-59)", hopToServer, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🕐 Возраст сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
+    AddButton(TabContainer, "🚀 Хоп на 50-59 мин (возраст)", hopToServer, Color3.fromRGB(0, 200, 100))
     AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
     AddButton(TabContainer, "⛔ Остановить фарм", StopFarm, Color3.fromRGB(80, 200, 80))
     for name, pos in pairs(teleports) do
@@ -291,5 +303,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Blox Hub v3.3 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
+    print("✅ Blox Hub v3.4 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
 end
