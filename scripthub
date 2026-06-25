@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v2.7 (Обход ошибки 773)
+--  BLOX HUB v3.0 (Сервер-хоп через API)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -68,8 +68,8 @@ local createSuccess, createErr = pcall(function()
     -- Главное меню
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 580)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -290)
+    MainFrame.Size = UDim2.new(0, 450, 0, 500) -- чуть шире для новых кнопок
+    MainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -83,11 +83,11 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 45)
-    Title.Text = "⭐ Blox Hub v2.7"
+    Title.Text = "⭐ Blox Hub v3.0 (API Хоп)"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
-    Title.TextSize = 26
+    Title.TextSize = 24
 
     local TabContainer = Instance.new("Frame")
     TabContainer.Parent = MainFrame
@@ -106,7 +106,7 @@ local createSuccess, createErr = pcall(function()
         btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 85)
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         btn.Font = Enum.Font.SourceSans
-        btn.TextSize = 18
+        btn.TextSize = 17
         btn.BorderSizePixel = 0
         btn.BackgroundTransparency = 0.2
         local cornerBtn = Instance.new("UICorner")
@@ -115,61 +115,94 @@ local createSuccess, createErr = pcall(function()
         btn.MouseButton1Click:Connect(callback)
     end
 
-    -- ========== ФУНКЦИИ ==========
+    -- ========== НОВЫЕ ФУНКЦИИ (API ХОП) ==========
 
-    -- 1. Показать время
+    local HttpService = game:GetService("HttpService")
+    local TeleportService = game:GetService("TeleportService")
+    local placeId = game.PlaceId
+
+    -- Получаем список серверов
+    local function getServers()
+        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100"
+        local success, response = pcall(function()
+            return HttpService:GetAsync(url)
+        end)
+        if not success then
+            Notify("❌ Не удалось получить список серверов")
+            return nil
+        end
+        local data = HttpService:JSONDecode(response)
+        return data.data
+    end
+
+    -- Вычисляем возраст сервера в секундах (по полю created)
+    local function getServerAge(server)
+        -- created выглядит так: "2023-01-01T12:00:00.000Z"
+        local created = server.created
+        if not created then return 0 end
+        local now = os.time()
+        -- Парсим дату (упрощённо)
+        local year, month, day, hour, min, sec = created:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+        if not year then return 0 end
+        local timeTable = {year=year, month=month, day=day, hour=hour, min=min, sec=sec}
+        local serverTime = os.time(timeTable)
+        return os.difftime(now, serverTime)
+    end
+
+    -- Основная функция хопа
+    local function hopToServer(targetMinStart, targetMinEnd)
+        Notify("🔍 Поиск серверов с :" .. targetMinStart .. "-" .. targetMinEnd .. "...")
+        local servers = getServers()
+        if not servers then return end
+
+        local found = nil
+        local currentTime = workspace.DistributedGameTime
+        local currentMin = math.floor((currentTime % 3600) / 60)
+
+        -- Сначала проверяем текущий сервер
+        if currentMin >= targetMinStart and currentMin <= targetMinEnd then
+            Notify("✅ Уже на сервере с :" .. string.format("%02d", currentMin))
+            return
+        end
+
+        -- Ищем подходящий сервер
+        for _, server in pairs(servers) do
+            local age = getServerAge(server)
+            local minutes = math.floor((age % 3600) / 60)
+            if minutes >= targetMinStart and minutes <= targetMinEnd then
+                found = server
+                break
+            end
+        end
+
+        if found then
+            Notify("⏳ Найден сервер :" .. string.format("%02d", math.floor((getServerAge(found) % 3600) / 60)) .. ". Телепорт...")
+            TeleportService:TeleportToPlaceInstance(placeId, found.id, Player)
+        else
+            Notify("❌ Сервер в диапазоне :" .. targetMinStart .. "-" .. targetMinEnd .. " не найден. Попробуй позже.")
+        end
+    end
+
+    -- ========== СТАРЫЕ ФУНКЦИИ (обновлены) ==========
+
     local function ShowServerTime()
         local seconds = workspace.DistributedGameTime
         local h = math.floor(seconds / 3600)
         local m = math.floor((seconds % 3600) / 60)
         local s = math.floor(seconds % 60)
-        Notify(string.format("🕐 %02d:%02d:%02d", h, m, s))
+        Notify(string.format("🕐 Сервер работает: %02d:%02d:%02d", h, m, s))
     end
 
-    -- 2. Автоматический поиск :55-59 с обходом ошибки 773
-    local function StartAutoSearch()
-        local seconds = workspace.DistributedGameTime
-        local m = math.floor((seconds % 3600) / 60)
-        
-        if m >= 55 and m <= 59 then
-            Notify("✅ Найден сервер с :" .. string.format("%02d", m))
-            return
-        end
-
-        Notify("⏳ Текущее время :" .. string.format("%02d", m) .. " – ищем сервер...")
-
-        -- Пытаемся телепортироваться через TeleportService (если ошибка – перехватываем)
-        local teleportSuccess, teleportErr = pcall(function()
-            game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+    local function RestartGame()
+        Notify("🔄 Перезапуск игры...")
+        pcall(function()
+            game:Shutdown()
         end)
-
-        if not teleportSuccess then
-            -- Если ошибка 773 или другая – предлагаем ручной переход
-            Notify("❌ Авто-телепорт недоступен. Нажми на кнопку ещё раз после ручного перезахода.")
-            Notify("⏳ Текущее время :" .. string.format("%02d", m) .. " – перезайди на другой сервер вручную.")
-        end
+        wait(2)
+        Notify("❌ Не удалось перезапустить автоматически. Перезайди вручную.")
     end
 
-    -- 3. Обычный поиск :59 (однократный) – с обработкой ошибки
-    local function FindServerWith59()
-        local seconds = workspace.DistributedGameTime
-        local m = math.floor((seconds % 3600) / 60)
-        if m == 59 then
-            Notify("✅ Уже на сервере с :59!")
-            return
-        end
-
-        Notify("⏳ Текущее :" .. string.format("%02d", m) .. " – попытка телепорта...")
-        local success, err = pcall(function()
-            game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-        end)
-
-        if not success then
-            Notify("❌ Авто-телепорт заблокирован. Перезайди вручную.")
-        end
-    end
-
-    -- 4. Авто-фарм (без изменений)
+    -- ========== ФАРМ (без изменений) ==========
     local farming = false
     local farmCoroutine = nil
 
@@ -222,7 +255,7 @@ local createSuccess, createErr = pcall(function()
         Notify("⛔ Фарм остановлен")
     end
 
-    -- 5. Телепорты (без изменений)
+    -- ========== ТЕЛЕПОРТЫ ==========
     local teleports = {
         ["Центр"] = Vector3.new(0, 10, 0),
         ["Остров джунглей"] = Vector3.new(1000, 10, 1000),
@@ -234,13 +267,16 @@ local createSuccess, createErr = pcall(function()
         if char and char:FindFirstChild("HumanoidRootPart") then
             char.HumanoidRootPart.CFrame = CFrame.new(pos)
             Notify("📍 Телепорт в " .. tostring(pos))
+        else
+            Notify("❌ Персонаж не найден")
         end
     end
 
     -- ========== КНОПКИ ==========
     AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🔍 Поиск сервера :59", FindServerWith59, Color3.fromRGB(200, 150, 50))
-    AddButton(TabContainer, "🔍 Автопоиск :55-59 (с обходом)", StartAutoSearch, Color3.fromRGB(0, 180, 0))
+    AddButton(TabContainer, "🔄 Перезапустить игру", RestartGame, Color3.fromRGB(255, 100, 100))
+    AddButton(TabContainer, "🚀 Сервер-хоп на :55-59 (API)", function() hopToServer(55, 59) end, Color3.fromRGB(0, 200, 100))
+    AddButton(TabContainer, "🎯 Сервер-хоп на :59 (точно)", function() hopToServer(59, 59) end, Color3.fromRGB(0, 150, 200))
     AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
     AddButton(TabContainer, "⛔ Остановить фарм", StopFarm, Color3.fromRGB(80, 200, 80))
     for name, pos in pairs(teleports) do
@@ -249,7 +285,6 @@ local createSuccess, createErr = pcall(function()
 
     print("6. Кнопки добавлены")
 
-    -- Логика открытия/закрытия
     local menuVisible = false
     toggleButton.MouseButton1Click:Connect(function()
         menuVisible = not menuVisible
@@ -263,5 +298,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Blox Hub v2.7 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
+    print("✅ Blox Hub v3.0 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
 end
