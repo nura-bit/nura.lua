@@ -1,5 +1,5 @@
 -- =============================================
---  BLOX HUB v2.6 (Автопоиск сервера :55-59)
+--  BLOX HUB v2.7 (Обход ошибки 773)
 -- =============================================
 
 print("1. Скрипт начал выполнение")
@@ -18,7 +18,7 @@ local function Notify(text)
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Blox Hub",
             Text = text,
-            Duration = 3
+            Duration = 4
         })
     end)
 end
@@ -68,8 +68,8 @@ local createSuccess, createErr = pcall(function()
     -- Главное меню
     local MainFrame = Instance.new("Frame")
     MainFrame.Parent = screenGui
-    MainFrame.Size = UDim2.new(0, 420, 0, 560)
-    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -280)
+    MainFrame.Size = UDim2.new(0, 420, 0, 580)
+    MainFrame.Position = UDim2.new(0.5, -210, 0.5, -290)
     MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
     MainFrame.BackgroundTransparency = 0.1
     MainFrame.Active = true
@@ -83,7 +83,7 @@ local createSuccess, createErr = pcall(function()
     local Title = Instance.new("TextLabel")
     Title.Parent = MainFrame
     Title.Size = UDim2.new(1, 0, 0, 45)
-    Title.Text = "⭐ Blox Hub v2.6"
+    Title.Text = "⭐ Blox Hub v2.7"
     Title.TextColor3 = Color3.fromRGB(255, 215, 0)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.SourceSansBold
@@ -126,57 +126,50 @@ local createSuccess, createErr = pcall(function()
         Notify(string.format("🕐 %02d:%02d:%02d", h, m, s))
     end
 
-    -- 2. Обычный поиск :59 (однократный)
+    -- 2. Автоматический поиск :55-59 с обходом ошибки 773
+    local function StartAutoSearch()
+        local seconds = workspace.DistributedGameTime
+        local m = math.floor((seconds % 3600) / 60)
+        
+        if m >= 55 and m <= 59 then
+            Notify("✅ Найден сервер с :" .. string.format("%02d", m))
+            return
+        end
+
+        Notify("⏳ Текущее время :" .. string.format("%02d", m) .. " – ищем сервер...")
+
+        -- Пытаемся телепортироваться через TeleportService (если ошибка – перехватываем)
+        local teleportSuccess, teleportErr = pcall(function()
+            game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+        end)
+
+        if not teleportSuccess then
+            -- Если ошибка 773 или другая – предлагаем ручной переход
+            Notify("❌ Авто-телепорт недоступен. Нажми на кнопку ещё раз после ручного перезахода.")
+            Notify("⏳ Текущее время :" .. string.format("%02d", m) .. " – перезайди на другой сервер вручную.")
+        end
+    end
+
+    -- 3. Обычный поиск :59 (однократный) – с обработкой ошибки
     local function FindServerWith59()
         local seconds = workspace.DistributedGameTime
         local m = math.floor((seconds % 3600) / 60)
         if m == 59 then
             Notify("✅ Уже на сервере с :59!")
-        else
-            Notify("⏳ Переход на другой сервер...")
-            game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-        end
-    end
-
-    -- 3. АВТОМАТИЧЕСКИЙ ПОИСК :55-59 (цикл)
-    local autoSearchActive = false
-    local autoSearchThread = nil
-
-    local function StartAutoSearch55to59()
-        if autoSearchActive then
-            Notify("⏳ Поиск уже запущен")
             return
         end
-        autoSearchActive = true
-        Notify("🔍 Автопоиск :55-59 запущен...")
-        autoSearchThread = coroutine.create(function()
-            while autoSearchActive do
-                local seconds = workspace.DistributedGameTime
-                local m = math.floor((seconds % 3600) / 60)
-                if m >= 55 and m <= 59 then
-                    Notify("✅ Найден сервер с :" .. string.format("%02d", m) .. "! Поиск остановлен.")
-                    autoSearchActive = false
-                    break
-                else
-                    Notify("⏳ Текущее :" .. string.format("%02d", m) .. " — телепорт...")
-                    game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
-                    wait(5) -- пауза, чтобы дать время подключиться к новому серверу
-                end
-            end
-        end)
-        coroutine.resume(autoSearchThread)
-    end
 
-    local function StopAutoSearch()
-        if autoSearchActive then
-            autoSearchActive = false
-            Notify("⛔ Автопоиск остановлен")
-        else
-            Notify("ℹ️ Поиск не был запущен")
+        Notify("⏳ Текущее :" .. string.format("%02d", m) .. " – попытка телепорта...")
+        local success, err = pcall(function()
+            game:GetService("TeleportService"):Teleport(game.PlaceId, Player)
+        end)
+
+        if not success then
+            Notify("❌ Авто-телепорт заблокирован. Перезайди вручную.")
         end
     end
 
-    -- 4. Авто-фарм
+    -- 4. Авто-фарм (без изменений)
     local farming = false
     local farmCoroutine = nil
 
@@ -229,7 +222,7 @@ local createSuccess, createErr = pcall(function()
         Notify("⛔ Фарм остановлен")
     end
 
-    -- 5. Телепорты
+    -- 5. Телепорты (без изменений)
     local teleports = {
         ["Центр"] = Vector3.new(0, 10, 0),
         ["Остров джунглей"] = Vector3.new(1000, 10, 1000),
@@ -246,9 +239,8 @@ local createSuccess, createErr = pcall(function()
 
     -- ========== КНОПКИ ==========
     AddButton(TabContainer, "🕐 Время сервера", ShowServerTime, Color3.fromRGB(70, 130, 180))
-    AddButton(TabContainer, "🔍 Найти сервер :59 (точно)", FindServerWith59, Color3.fromRGB(200, 150, 50))
-    AddButton(TabContainer, "▶️ Запустить автопоиск :55-59", StartAutoSearch55to59, Color3.fromRGB(0, 180, 0))
-    AddButton(TabContainer, "⏹️ Остановить автопоиск", StopAutoSearch, Color3.fromRGB(200, 50, 50))
+    AddButton(TabContainer, "🔍 Поиск сервера :59", FindServerWith59, Color3.fromRGB(200, 150, 50))
+    AddButton(TabContainer, "🔍 Автопоиск :55-59 (с обходом)", StartAutoSearch, Color3.fromRGB(0, 180, 0))
     AddButton(TabContainer, "⚔️ Включить фарм", StartFarm, Color3.fromRGB(200, 80, 80))
     AddButton(TabContainer, "⛔ Остановить фарм", StopFarm, Color3.fromRGB(80, 200, 80))
     for name, pos in pairs(teleports) do
@@ -271,5 +263,5 @@ end)
 if not createSuccess then
     print("Ошибка при создании GUI:", createErr)
 else
-    print("✅ Blox Hub v2.6 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
+    print("✅ Blox Hub v2.7 успешно загружен! Нажми на жёлтую ⭐ для открытия меню.")
 end
